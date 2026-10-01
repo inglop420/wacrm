@@ -41,11 +41,13 @@ const HANDOFF_QUEUE = '__queue__';
 const PROVIDER_LABEL: Record<AiProvider, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic (Claude)',
+  openrouter: 'OpenRouter',
 };
 
 const KEY_PLACEHOLDER: Record<AiProvider, string> = {
   openai: 'sk-...',
   anthropic: 'sk-ant-...',
+  openrouter: 'sk-or-v1-...',
 };
 
 export function AiConfig() {
@@ -61,6 +63,7 @@ export function AiConfig() {
   const [configured, setConfigured] = useState(false);
   const [provider, setProvider] = useState<AiProvider>('openai');
   const [model, setModel] = useState(AI_PROVIDER_DEFAULT_MODEL.openai);
+  const [openrouterModels, setOpenrouterModels] = useState<Array<{ id: string; name: string }>>([]);
   const [apiKey, setApiKey] = useState('');
   const [keyEdited, setKeyEdited] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -124,6 +127,25 @@ export function AiConfig() {
     void fetchAccountMembers().then(setMembers);
   }, [accountId, fetchConfig]);
 
+  useEffect(() => {
+    if (provider !== 'openrouter') return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/ai/models?provider=openrouter');
+        const data = await res.json();
+        if (active && Array.isArray(data?.models)) {
+          setOpenrouterModels(data.models);
+        }
+      } catch {
+        // Fallback silently
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [provider]);
+
   // Swap the model default when the provider changes, unless the user
   // typed a custom model.
   const handleProviderChange = (next: AiProvider) => {
@@ -131,6 +153,7 @@ export function AiConfig() {
     const isDefaultModel =
       model === AI_PROVIDER_DEFAULT_MODEL.openai ||
       model === AI_PROVIDER_DEFAULT_MODEL.anthropic ||
+      model === AI_PROVIDER_DEFAULT_MODEL.openrouter ||
       model.trim() === '';
     if (isDefaultModel) setModel(AI_PROVIDER_DEFAULT_MODEL[next]);
   };
@@ -281,19 +304,66 @@ export function AiConfig() {
                     <SelectItem value="anthropic">
                       {PROVIDER_LABEL.anthropic}
                     </SelectItem>
+                    <SelectItem value="openrouter">
+                      {PROVIDER_LABEL.openrouter}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="ai-model">{t('model')}</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="ai-model">{t('model')}</Label>
+                  {provider === 'openrouter' && (
+                    <a
+                      href="https://openrouter.ai/models"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      {t('browseOpenRouterModels')} ↗
+                    </a>
+                  )}
+                </div>
                 <Input
                   id="ai-model"
+                  list={provider === 'openrouter' ? 'openrouter-models-list' : undefined}
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
                   disabled={disabled}
                 />
+                {provider === 'openrouter' && (
+                  <>
+                    <datalist id="openrouter-models-list">
+                      {openrouterModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </datalist>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[11px] text-muted-foreground">{t('suggestedModels')}:</span>
+                      {[
+                        'openai/gpt-4o-mini',
+                        'anthropic/claude-3.5-sonnet',
+                        'deepseek/deepseek-chat',
+                        'google/gemini-2.5-flash',
+                        'meta-llama/llama-3.3-70b-instruct',
+                      ].map((sug) => (
+                        <button
+                          key={sug}
+                          type="button"
+                          onClick={() => setModel(sug)}
+                          disabled={disabled}
+                          className="rounded border border-border bg-muted/50 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        >
+                          {sug.split('/')[1]}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

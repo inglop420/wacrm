@@ -192,3 +192,63 @@ describe('generateReply — Anthropic', () => {
     expect(body.messages).toHaveLength(1)
   })
 })
+
+describe('generateReply — OpenRouter', () => {
+  it('calls the openrouter chat completions endpoint and returns text and usage', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      okResponse({
+        choices: [{ message: { content: 'Hola desde OpenRouter' } }],
+        usage: { prompt_tokens: 25, completion_tokens: 10, total_tokens: 35 },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await generateReply({
+      config: config({
+        provider: 'openrouter',
+        model: 'deepseek/deepseek-chat',
+        apiKey: 'sk-or-v1-test',
+      }),
+      systemPrompt: 'Instrucciones del sistema',
+      messages: [{ role: 'user', content: 'Hola' }],
+    })
+
+    expect(res).toEqual({
+      text: 'Hola desde OpenRouter',
+      handoff: false,
+      usage: { promptTokens: 25, completionTokens: 10, totalTokens: 35 },
+    })
+
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('openrouter.ai/api/v1/chat/completions')
+    expect(opts.headers.Authorization).toBe('Bearer sk-or-v1-test')
+    expect(opts.headers['HTTP-Referer']).toBeTruthy()
+    expect(opts.headers['X-Title']).toBe('WaCRM')
+
+    const body = JSON.parse(opts.body)
+    expect(body.model).toBe('deepseek/deepseek-chat')
+    expect(body.messages[0].role).toBe('system')
+    expect(body.messages[1].role).toBe('user')
+  })
+
+  it('detects handoff sentinel in OpenRouter output', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        okResponse({
+          choices: [{ message: { content: 'Un momento [[HANDOFF]]' } }],
+        }),
+      ),
+    )
+
+    const res = await generateReply({
+      config: config({ provider: 'openrouter', apiKey: 'sk-or-v1-test' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Necesito un humano' }],
+    })
+
+    expect(res.handoff).toBe(true)
+    expect(res.text).toBe('Un momento')
+  })
+})
+
