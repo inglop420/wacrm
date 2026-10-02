@@ -34,7 +34,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ProfileForm() {
   const t = useTranslations('Settings.profile');
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, accountRole, refreshProfile } = useAuth();
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -313,8 +313,25 @@ export function ProfileForm() {
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-muted-foreground">{t('role')}</dt>
-                <dd className="mt-0.5 font-mono text-foreground">
-                  {profile?.role ?? 'user'}
+                <dd className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-foreground">
+                  <span className="capitalize">{profile?.account_role ?? accountRole ?? 'owner'}</span>
+                  {(profile?.account_role === 'owner' || accountRole === 'owner') ? (
+                    <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                      Superadmin / Propietario
+                    </span>
+                  ) : (profile?.account_role === 'admin' || accountRole === 'admin') ? (
+                    <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                      Administrador
+                    </span>
+                  ) : (profile?.account_role === 'agent' || accountRole === 'agent') ? (
+                    <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-semibold text-foreground">
+                      Agente
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] text-muted-foreground">
+                      Observador
+                    </span>
+                  )}
                 </dd>
               </div>
               <div>

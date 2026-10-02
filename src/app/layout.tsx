@@ -22,16 +22,21 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "legmacrm",
+    template: "%s — legmacrm",
   },
-  description: "Self-hostable CRM template for WhatsApp.",
+  description: "CRM LEGMA para WhatsApp.",
   robots: {
     index: false,
     follow: false,
   },
   icons: {
-    icon: [{ url: "/icon" }],
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/faviconP.png", sizes: "32x32", type: "image/png" },
+    ],
+    shortcut: "/favicon.png",
+    apple: "/logo.png",
   },
   formatDetection: {
     email: false,

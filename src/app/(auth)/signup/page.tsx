@@ -147,7 +147,7 @@ function SignupPageInner() {
             {inviteToken ? (
               <UsersRound className="h-6 w-6 text-primary" />
             ) : (
-              <MessageSquare className="h-6 w-6 text-primary" />
+              <img src="/logo.png" alt="CRM LEGMA" className="h-9 w-9 object-contain rounded-lg" />
             )}
           </div>
           <CardTitle className="text-xl text-foreground">
