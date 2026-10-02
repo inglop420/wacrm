@@ -22,8 +22,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "legmacrm",
-    template: "%s — legmacrm",
+    default: "LEGMA - CRM",
+    template: "%s — LEGMA - CRM",
   },
   description: "CRM LEGMA para WhatsApp.",
   robots: {
