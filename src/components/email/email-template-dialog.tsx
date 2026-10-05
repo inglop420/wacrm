@@ -12,7 +12,6 @@ import {
   Copy,
   Code,
   Layers,
-  ChevronDown,
   Info,
   CheckCircle2,
   Eye,
@@ -20,6 +19,7 @@ import {
   Palette,
   ExternalLink,
   Tag,
+  PenTool,
 } from 'lucide-react';
 import type { EmailTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -28,13 +28,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
@@ -90,7 +88,10 @@ export function EmailTemplateDialog({
   // Mode: Visual Assistant vs Direct HTML
   const [editorTab, setEditorTab] = useState<'visual' | 'code'>('visual');
 
-  // Preview options
+  // Mobile/Tablet switcher: Editor vs Preview
+  const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('editor');
+
+  // Preview device simulation options
   const [devicePreview, setDevicePreview] = useState<'desktop' | 'mobile'>('desktop');
   const [useSampleData, setUseSampleData] = useState(true);
 
@@ -115,7 +116,6 @@ export function EmailTemplateDialog({
     if (!open) return;
 
     if (editingTemplate) {
-      // Try to parse existing embedded Legma builder data
       const parsed = parseLegmaHtml(editingTemplate.body_html);
       if (parsed) {
         setBuilderData(parsed);
@@ -123,7 +123,6 @@ export function EmailTemplateDialog({
         setEditorTab('visual');
         if (parsed.presetId) setSelectedPresetId(parsed.presetId);
       } else {
-        // Was created outside or without metadata -> Open in code editor
         setRawHtml(editingTemplate.body_html);
         setBuilderData({
           ...LEGMA_PRESETS[0].data,
@@ -133,13 +132,13 @@ export function EmailTemplateDialog({
         setEditorTab('code');
       }
     } else {
-      // New template: load default corporate bienvenida
       const defaultPreset = LEGMA_PRESETS[0];
       setBuilderData({ ...defaultPreset.data });
       setRawHtml(generateLegmaHtml(defaultPreset.data));
       setSelectedPresetId('legma-bienvenida');
       setEditorTab('visual');
     }
+    setMobileTab('editor');
   }, [open, editingTemplate]);
 
   // Keep rawHtml synced when visual builderData changes
@@ -177,7 +176,6 @@ export function EmailTemplateDialog({
       return;
     }
 
-    // Visual builder smart insertion
     if (activeInputRef.current?.field === 'subject') {
       setBuilderData((prev) => ({ ...prev, subject: prev.subject + ` ${tag}` }));
       toast.info(`Variable ${tag} añadida al Asunto`);
@@ -188,7 +186,6 @@ export function EmailTemplateDialog({
       setBuilderData((prev) => ({ ...prev, introParagraph: prev.introParagraph + ` ${tag}` }));
       toast.info(`Variable ${tag} añadida al Mensaje`);
     } else {
-      // Default to intro paragraph
       setBuilderData((prev) => ({ ...prev, introParagraph: prev.introParagraph + ` ${tag}` }));
       toast.info(`Variable ${tag} insertada`);
     }
@@ -198,7 +195,7 @@ export function EmailTemplateDialog({
   function handleAddCalloutRow() {
     setBuilderData((prev) => ({
       ...prev,
-      calloutRows: [...(prev.calloutRows || []), { label: 'Nuevo campo', value: 'Valor de ejemplo' }],
+      calloutRows: [...(prev.calloutRows || []), { label: 'Nuevo campo', value: 'Valor' }],
     }));
   }
 
@@ -315,39 +312,42 @@ export function EmailTemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1340px] w-[96vw] h-[92vh] max-h-[92vh] p-0 flex flex-col gap-0 overflow-hidden bg-background border-border/80 shadow-2xl">
+      <DialogContent className="w-[98vw] max-w-[1400px] sm:max-w-[96vw] lg:max-w-[1360px] h-[94vh] max-h-[94vh] sm:h-[92vh] sm:max-h-[92vh] p-0 flex flex-col gap-0 overflow-hidden bg-background border-border/80 shadow-2xl">
         {/* ==================================================== */}
-        {/* TOP BAR / HEADER                                     */}
+        {/* TOP BAR / HEADER (RESPONSIVE)                         */}
         {/* ==================================================== */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3 bg-muted/20">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-sm">
-              <Sparkles className="h-5 w-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 border-b px-4 sm:px-6 py-2.5 sm:py-3 bg-muted/20 shrink-0">
+          {/* Title block */}
+          <div className="flex items-center gap-2.5 min-w-0 pr-8 sm:pr-0">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-xs">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <DialogTitle className="text-base font-bold flex items-center gap-2">
-                {editingTemplate ? 'Editar Plantilla Corporativa' : 'Creador de Plantillas de Correo'}
-                <Badge variant="outline" className="border-blue-500/30 text-blue-500 bg-blue-500/10 text-[11px] font-normal">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <DialogTitle className="text-sm sm:text-base font-bold truncate">
+                  {editingTemplate ? 'Editar Plantilla Corporativa' : 'Creador de Plantillas de Correo'}
+                </DialogTitle>
+                <Badge variant="outline" className="border-blue-500/30 text-blue-500 bg-blue-500/10 text-[10px] sm:text-[11px] font-normal shrink-0">
                   Estándar LEGMA
                 </Badge>
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
+              </div>
+              <DialogDescription className="text-[11px] sm:text-xs text-muted-foreground truncate hidden sm:block">
                 Diseño corporativo homologado y compatible con Gmail, Outlook y dispositivos móviles.
               </DialogDescription>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Preset Selector */}
-            <div className="flex items-center gap-1.5">
-              <Label className="text-xs text-muted-foreground whitespace-nowrap">Modelo Base:</Label>
+          {/* Controls: Preset selector & desktop toggles */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-1 sm:flex-initial min-w-[170px]">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap hidden md:inline">Modelo:</Label>
               <Select
                 value={selectedPresetId}
                 onValueChange={(val) => {
                   if (val) handleSelectPreset(val);
                 }}
               >
-                <SelectTrigger className="h-8 w-[210px] text-xs">
+                <SelectTrigger className="h-7 sm:h-8 w-full sm:w-[220px] text-xs">
                   <SelectValue placeholder="Elegir modelo corporativo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -362,8 +362,8 @@ export function EmailTemplateDialog({
               </Select>
             </div>
 
-            {/* Device preview toggle */}
-            <div className="flex items-center rounded-lg border bg-background p-0.5 text-xs shadow-sm">
+            {/* Device preview toggle (visible on desktop) */}
+            <div className="hidden lg:flex items-center rounded-lg border bg-background p-0.5 text-xs shadow-xs shrink-0">
               <Button
                 type="button"
                 variant={devicePreview === 'desktop' ? 'secondary' : 'ghost'}
@@ -389,11 +389,43 @@ export function EmailTemplateDialog({
         </div>
 
         {/* ==================================================== */}
-        {/* VARIABLE CHIPS BAR (ALWAY VISIBLE)                   */}
+        {/* MOBILE / TABLET SWITCHER (ONLY VISIBLE ON < lg)      */}
         {/* ==================================================== */}
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-5 py-2 overflow-x-auto text-xs">
+        <div className="lg:hidden flex items-center justify-center p-1.5 bg-muted/40 border-b shrink-0">
+          <div className="grid grid-cols-2 w-full max-w-sm h-8 bg-muted/80 p-0.5 rounded-lg text-xs">
+            <button
+              type="button"
+              onClick={() => setMobileTab('editor')}
+              className={`flex items-center justify-center gap-1.5 rounded-md font-medium transition-all ${
+                mobileTab === 'editor'
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <PenTool className="h-3.5 w-3.5 text-blue-500" />
+              1. Diseñar / Editar
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('preview')}
+              className={`flex items-center justify-center gap-1.5 rounded-md font-medium transition-all ${
+                mobileTab === 'preview'
+                  ? 'bg-background text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Eye className="h-3.5 w-3.5 text-purple-500" />
+              2. Vista Previa en Vivo
+            </button>
+          </div>
+        </div>
+
+        {/* ==================================================== */}
+        {/* VARIABLE CHIPS BAR (TOUCH-FRIENDLY & SCROLLABLE)     */}
+        {/* ==================================================== */}
+        <div className="flex items-center gap-2 border-b bg-muted/30 px-3 sm:px-6 py-1.5 overflow-x-auto text-xs shrink-0">
           <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
-            <Tag className="h-3 w-3 text-primary" /> Variables dinámicas:
+            <Tag className="h-3 w-3 text-primary" /> Variables:
           </span>
           <div className="flex items-center gap-1.5 flex-nowrap">
             {DYNAMIC_VARIABLES.map((v) => (
@@ -411,21 +443,26 @@ export function EmailTemplateDialog({
         </div>
 
         {/* ==================================================== */}
-        {/* MAIN BODY: 2 COLUMNS                                 */}
+        {/* MAIN BODY: 2 COLUMNS (SIDE-BY-SIDE OR MOBILE TABS)   */}
         {/* ==================================================== */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 overflow-hidden divide-y lg:divide-y-0 lg:divide-x">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0 overflow-hidden divide-y lg:divide-y-0 lg:divide-x">
           {/* ================================================== */}
-          {/* LEFT COLUMN: CONTROLS & FORM (5/12)                */}
+          {/* LEFT COLUMN: CONTROLS & FORM                       */}
           {/* ================================================== */}
-          <div className="lg:col-span-6 flex flex-col h-full overflow-hidden bg-background">
-            <div className="border-b px-4 py-2 bg-muted/10 flex items-center justify-between">
+          <div
+            className={`flex-col h-full overflow-hidden bg-background min-w-0 ${
+              mobileTab === 'editor' ? 'flex' : 'hidden lg:flex'
+            }`}
+          >
+            {/* Visual vs Code sub-tabs */}
+            <div className="border-b px-4 py-2 bg-muted/10 flex items-center justify-between shrink-0">
               <Tabs
                 value={editorTab}
                 onValueChange={(v) => setEditorTab(v as 'visual' | 'code')}
                 className="w-full"
               >
                 <div className="flex items-center justify-between">
-                  <TabsList className="grid w-[280px] grid-cols-2 h-8">
+                  <TabsList className="grid w-[260px] grid-cols-2 h-7 sm:h-8">
                     <TabsTrigger value="visual" className="text-xs gap-1.5">
                       <Sparkles className="h-3.5 w-3.5 text-blue-500" />
                       Diseñador Visual
@@ -444,15 +481,15 @@ export function EmailTemplateDialog({
             </div>
 
             {/* Scrollable Form Content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 sm:space-y-5">
               {editorTab === 'visual' ? (
                 <>
                   {/* SECCIÓN 1: IDENTIFICACIÓN BÁSICA */}
-                  <div className="space-y-3.5 rounded-xl border p-4 bg-muted/10">
+                  <div className="space-y-3 rounded-xl border p-3.5 sm:p-4 bg-muted/10">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                       <Info className="h-3.5 w-3.5 text-primary" /> 1. Identificación y Asunto
                     </h3>
-                    <div className="grid gap-3">
+                    <div className="space-y-2.5">
                       <div className="space-y-1">
                         <Label htmlFor="b_name" className="text-xs font-semibold">
                           Nombre interno de la plantilla
@@ -488,12 +525,12 @@ export function EmailTemplateDialog({
                   </div>
 
                   {/* SECCIÓN 2: CABECERA & GRADIENTE */}
-                  <div className="space-y-3.5 rounded-xl border p-4 bg-muted/10">
+                  <div className="space-y-3 rounded-xl border p-3.5 sm:p-4 bg-muted/10">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                       <Palette className="h-3.5 w-3.5 text-primary" /> 2. Cabecera e Imagen Corporativa
                     </h3>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                       <div className="space-y-1">
                         <Label htmlFor="b_hTitle" className="text-xs font-semibold">
                           Título de cabecera
@@ -522,7 +559,7 @@ export function EmailTemplateDialog({
 
                     <div className="space-y-1.5 pt-1">
                       <Label className="text-xs font-semibold">Color / Gradiente de Marca:</Label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2">
                         {(Object.keys(GRADIENTS) as GradientTheme[]).map((gKey) => {
                           const g = GRADIENTS[gKey];
                           const isSelected = builderData.gradient === gKey;
@@ -550,7 +587,7 @@ export function EmailTemplateDialog({
                   </div>
 
                   {/* SECCIÓN 3: MENSAJE & SALUDO */}
-                  <div className="space-y-3.5 rounded-xl border p-4 bg-muted/10">
+                  <div className="space-y-3 rounded-xl border p-3.5 sm:p-4 bg-muted/10">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                       <Layers className="h-3.5 w-3.5 text-primary" /> 3. Saludo y Mensaje Principal
                     </h3>
@@ -572,11 +609,9 @@ export function EmailTemplateDialog({
                     </div>
 
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="b_intro" className="text-xs font-semibold">
-                          Párrafo de introducción (Acepta HTML básico y negritas)
-                        </Label>
-                      </div>
+                      <Label htmlFor="b_intro" className="text-xs font-semibold">
+                        Párrafo de introducción (Acepta HTML básico y negritas)
+                      </Label>
                       <Textarea
                         id="b_intro"
                         rows={3}
@@ -592,7 +627,7 @@ export function EmailTemplateDialog({
                   </div>
 
                   {/* SECCIÓN 4: TARJETA DESTACADA / CALLOUT BOX */}
-                  <div className="space-y-3.5 rounded-xl border p-4 bg-muted/10">
+                  <div className="space-y-3 rounded-xl border p-3.5 sm:p-4 bg-muted/10">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                         <Sliders className="h-3.5 w-3.5 text-primary" /> 4. Tarjeta Destacada (Callout Box)
@@ -611,7 +646,7 @@ export function EmailTemplateDialog({
 
                     {builderData.hasCallout && (
                       <div className="space-y-3 pt-2 border-t">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                           <div className="space-y-1">
                             <Label className="text-xs font-semibold">Estilo de color:</Label>
                             <Select
@@ -658,12 +693,12 @@ export function EmailTemplateDialog({
                             </Button>
                           </div>
                           {(builderData.calloutRows || []).map((row, i) => (
-                            <div key={i} className="flex items-center gap-2">
+                            <div key={i} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 p-1.5 sm:p-0 rounded-lg sm:rounded-none bg-background/50 sm:bg-transparent border sm:border-0">
                               <Input
                                 placeholder="Etiqueta (ej. Email)"
                                 value={row.label}
                                 onChange={(e) => handleUpdateCalloutRow(i, e.target.value, row.value)}
-                                className="h-7 text-xs w-1/3"
+                                className="h-7 text-xs sm:w-1/3"
                               />
                               <Input
                                 placeholder="Valor (ej. {{contact.email}})"
@@ -675,7 +710,7 @@ export function EmailTemplateDialog({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                className="h-7 w-7 self-end sm:self-center text-muted-foreground hover:text-destructive shrink-0"
                                 onClick={() => handleRemoveCalloutRow(i)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -685,7 +720,7 @@ export function EmailTemplateDialog({
                         </div>
 
                         {/* Highlight block (Password / Deal Value) */}
-                        <div className="grid grid-cols-2 gap-3 pt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-1">
                           <div className="space-y-1">
                             <Label className="text-xs">Etiqueta destacada (Opcional):</Label>
                             <Input
@@ -724,7 +759,7 @@ export function EmailTemplateDialog({
                   </div>
 
                   {/* SECCIÓN 5: BENEFICIOS / CARACTERÍSTICAS */}
-                  <div className="space-y-3.5 rounded-xl border p-4 bg-muted/10">
+                  <div className="space-y-3 rounded-xl border p-3.5 sm:p-4 bg-muted/10">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                         <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> 5. Puntos Clave / Beneficios
@@ -772,9 +807,9 @@ export function EmailTemplateDialog({
                                 placeholder="⚖️"
                                 value={f.emoji}
                                 onChange={(e) => handleUpdateFeature(i, 'emoji', e.target.value)}
-                                className="h-7 w-12 text-center text-sm p-1"
+                                className="h-7 w-10 text-center text-sm p-1 shrink-0"
                               />
-                              <div className="flex-1 space-y-1">
+                              <div className="flex-1 space-y-1 min-w-0">
                                 <Input
                                   placeholder="Título (ej. Boletín Judicial)"
                                   value={f.title}
@@ -792,7 +827,7 @@ export function EmailTemplateDialog({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
                                 onClick={() => handleRemoveFeature(i)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -805,7 +840,7 @@ export function EmailTemplateDialog({
                   </div>
 
                   {/* SECCIÓN 6: BOTÓN DE ACCIÓN (CTA) */}
-                  <div className="space-y-3.5 rounded-xl border p-4 bg-muted/10">
+                  <div className="space-y-3 rounded-xl border p-3.5 sm:p-4 bg-muted/10">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                         <ExternalLink className="h-3.5 w-3.5 text-primary" /> 6. Botón de Llamado a la Acción (CTA)
@@ -823,7 +858,7 @@ export function EmailTemplateDialog({
                     </div>
 
                     {builderData.hasCta && (
-                      <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-2 border-t">
                         <div className="space-y-1">
                           <Label className="text-xs font-semibold">Texto del Botón:</Label>
                           <Input
@@ -847,7 +882,7 @@ export function EmailTemplateDialog({
                   </div>
 
                   {/* SECCIÓN 7: CIERRE Y PIE */}
-                  <div className="space-y-3.5 rounded-xl border p-4 bg-muted/10">
+                  <div className="space-y-3 rounded-xl border p-3.5 sm:p-4 bg-muted/10">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                       <Info className="h-3.5 w-3.5 text-primary" /> 7. Despedida y Pie Institucional
                     </h3>
@@ -896,8 +931,8 @@ export function EmailTemplateDialog({
                     </Button>
                   </div>
                   <Textarea
-                    rows={22}
-                    className="font-mono text-xs leading-relaxed resize-none flex-1 min-h-[460px] bg-muted/30"
+                    rows={20}
+                    className="font-mono text-xs leading-relaxed resize-none flex-1 min-h-[380px] bg-muted/30"
                     placeholder="<!DOCTYPE html><html>...</html>"
                     value={rawHtml}
                     onChange={(e) => setRawHtml(e.target.value)}
@@ -908,21 +943,25 @@ export function EmailTemplateDialog({
           </div>
 
           {/* ================================================== */}
-          {/* RIGHT COLUMN: LIVE REAL-TIME PREVIEW (6/12)       */}
+          {/* RIGHT COLUMN: LIVE REAL-TIME PREVIEW               */}
           {/* ================================================== */}
-          <div className="lg:col-span-6 flex flex-col h-full overflow-hidden bg-slate-100 dark:bg-slate-950">
+          <div
+            className={`flex-col h-full overflow-hidden bg-slate-100 dark:bg-slate-950 min-w-0 ${
+              mobileTab === 'preview' ? 'flex' : 'hidden lg:flex'
+            }`}
+          >
             {/* Preview Toolbar */}
-            <div className="border-b px-4 py-2.5 bg-background/80 backdrop-blur flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-xs font-medium text-foreground">Vista Previa en Vivo</span>
-                <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                  ({devicePreview === 'desktop' ? 'Ancho 600px' : 'Móvil 375px'})
+            <div className="border-b px-3 sm:px-4 py-2 bg-background/80 backdrop-blur flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-xs font-medium text-foreground truncate">Vista Previa en Vivo</span>
+                <span className="text-[11px] text-muted-foreground hidden sm:inline truncate">
+                  ({devicePreview === 'desktop' ? 'Escritorio' : 'Móvil'})
                 </span>
               </div>
 
               {/* Sample data toggle */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <Label htmlFor="sample_toggle" className="text-xs text-muted-foreground cursor-pointer">
                   Datos de ejemplo
                 </Label>
@@ -935,16 +974,16 @@ export function EmailTemplateDialog({
             </div>
 
             {/* Quick Test Send Strip */}
-            <div className="border-b bg-muted/30 px-4 py-2 flex items-center justify-between gap-2 text-xs">
+            <div className="border-b bg-muted/30 px-3 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
               <span className="text-muted-foreground whitespace-nowrap text-[11px]">
                 🚀 Probar envío real:
               </span>
-              <div className="flex items-center gap-1.5 flex-1 max-w-sm">
+              <div className="flex items-center gap-1.5 flex-1 sm:flex-initial min-w-[200px]">
                 <Input
                   placeholder="tu-correo@legma.com.mx"
                   value={testEmail}
                   onChange={(e) => setTestEmail(e.target.value)}
-                  className="h-7 text-xs bg-background"
+                  className="h-7 text-xs bg-background flex-1"
                 />
                 <Button
                   type="button"
@@ -955,55 +994,50 @@ export function EmailTemplateDialog({
                   onClick={handleSendTestEmail}
                 >
                   <Send className="h-3 w-3" />
-                  {isSendingTest ? 'Enviando...' : 'Enviar'}
+                  {isSendingTest ? '...' : 'Enviar'}
                 </Button>
               </div>
             </div>
 
             {/* Iframe Preview Container */}
-            <div className="flex-1 overflow-y-auto p-4 flex justify-center items-start">
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4 flex justify-center items-start min-w-0">
               {devicePreview === 'desktop' ? (
                 /* Desktop Window Frame */
-                <div className="w-full max-w-[620px] rounded-xl border bg-white dark:bg-slate-900 shadow-xl overflow-hidden transition-all">
-                  {/* Fake client header */}
-                  <div className="bg-slate-100 dark:bg-slate-800 border-b px-4 py-2 flex items-center gap-2">
-                    <div className="flex gap-1.5">
+                <div className="w-full max-w-[620px] rounded-xl border bg-white dark:bg-slate-900 shadow-lg overflow-hidden transition-all">
+                  <div className="bg-slate-100 dark:bg-slate-800 border-b px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-2">
+                    <div className="flex gap-1.5 shrink-0">
                       <span className="h-2.5 w-2.5 rounded-full bg-rose-400 inline-block" />
                       <span className="h-2.5 w-2.5 rounded-full bg-amber-400 inline-block" />
                       <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 inline-block" />
                     </div>
-                    <div className="flex-1 text-center font-mono text-[11px] text-muted-foreground truncate">
+                    <div className="flex-1 text-center font-mono text-[10px] sm:text-[11px] text-muted-foreground truncate">
                       Asunto: {useSampleData ? interpolateSampleData(builderData.subject) : builderData.subject}
                     </div>
                   </div>
 
-                  {/* Sandboxed Iframe */}
                   <iframe
                     title="Live Preview Desktop"
                     srcDoc={currentPreviewHtml}
-                    className="w-full h-[620px] border-none bg-[#f5f7fa]"
+                    className="w-full h-[540px] sm:h-[600px] border-none bg-[#f5f7fa]"
                     sandbox="allow-same-origin"
                   />
                 </div>
               ) : (
                 /* Smartphone Mockup Frame */
-                <div className="w-[375px] rounded-[36px] border-[8px] border-slate-800 bg-slate-800 shadow-2xl overflow-hidden transition-all my-2">
-                  {/* Phone Notch */}
+                <div className="w-full max-w-[360px] rounded-[32px] sm:rounded-[36px] border-[6px] sm:border-[8px] border-slate-800 bg-slate-800 shadow-2xl overflow-hidden transition-all my-1 sm:my-2">
                   <div className="bg-slate-800 pt-2 pb-1 flex justify-center items-center">
-                    <div className="h-4 w-28 bg-slate-900 rounded-full" />
+                    <div className="h-3.5 w-24 bg-slate-900 rounded-full" />
                   </div>
 
-                  {/* Sandboxed Iframe for Mobile */}
                   <iframe
                     title="Live Preview Mobile"
                     srcDoc={currentPreviewHtml}
-                    className="w-full h-[580px] border-none bg-[#f5f7fa]"
+                    className="w-full h-[500px] sm:h-[560px] border-none bg-[#f5f7fa]"
                     sandbox="allow-same-origin"
                   />
 
-                  {/* Bottom indicator */}
                   <div className="bg-slate-800 py-1.5 flex justify-center">
-                    <div className="h-1 w-24 bg-slate-600 rounded-full" />
+                    <div className="h-1 w-20 bg-slate-600 rounded-full" />
                   </div>
                 </div>
               )}
@@ -1012,19 +1046,20 @@ export function EmailTemplateDialog({
         </div>
 
         {/* ==================================================== */}
-        {/* MODAL FOOTER                                         */}
+        {/* MODAL FOOTER (RESPONSIVE)                            */}
         {/* ==================================================== */}
-        <div className="border-t px-6 py-3 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+        <div className="border-t px-4 sm:px-6 py-2.5 sm:py-3 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
+          <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
             <span>Plantilla compatible con clientes modernos, modo oscuro y dispositivos móviles.</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="h-8"
               onClick={() => onOpenChange(false)}
             >
               Cancelar
@@ -1032,7 +1067,7 @@ export function EmailTemplateDialog({
             <Button
               type="button"
               size="sm"
-              className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md"
+              className="h-8 gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-xs"
               disabled={saving}
               onClick={handleSubmit}
             >
