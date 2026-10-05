@@ -915,6 +915,7 @@
         "send_buttons": "Enviar botones",
         "send_list": "Enviar lista",
         "send_template": "Enviar plantilla",
+        "send_email": "Enviar correo (Plantilla)",
         "add_tag": "Agregar etiqueta",
         "remove_tag": "Quitar etiqueta",
         "assign_conversation": "Asignar conversación",
@@ -957,6 +958,14 @@
         "time_based": {
           "label": "Por horario",
           "hint": "Según una programación recurrente"
+        },
+        "deal_stage_changed": {
+          "label": "Trato cambió de etapa",
+          "hint": "Cuando un trato en el pipeline se mueve a otra etapa"
+        },
+        "deal_created": {
+          "label": "Trato creado",
+          "hint": "Cuando se crea un nuevo trato en el pipeline"
         }
       },
       "trigger": "Disparador",

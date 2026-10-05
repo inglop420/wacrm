@@ -29,6 +29,7 @@ import {
   CircleSlash,
   Zap,
   Loader2,
+  Mail,
   ArrowDown,
   ArrowUp,
   MousePointerClick,
@@ -111,6 +112,7 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   send_buttons: { label: "send_buttons", icon: MousePointerClick, border: "border-l-primary" },
   send_list: { label: "send_list", icon: List, border: "border-l-primary" },
   send_template: { label: "send_template", icon: FileText, border: "border-l-primary" },
+  send_email: { label: "send_email", icon: Mail, border: "border-l-primary" },
   add_tag: { label: "add_tag", icon: Tag, border: "border-l-primary" },
   remove_tag: { label: "remove_tag", icon: TagIcon, border: "border-l-primary" },
   assign_conversation: { label: "assign_conversation", icon: UserCheck, border: "border-l-primary" },
@@ -127,6 +129,7 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "send_buttons",
   "send_list",
   "send_template",
+  "send_email",
   "add_tag",
   "remove_tag",
   "assign_conversation",
@@ -143,6 +146,8 @@ const TRIGGER_OPTIONS: { value: AutomationTriggerType }[] = [
   { value: "first_inbound_message" },
   { value: "keyword_match" },
   { value: "interactive_reply" },
+  { value: "deal_stage_changed" },
+  { value: "deal_created" },
   { value: "new_contact_created" },
   { value: "conversation_assigned" },
   { value: "tag_added" },
@@ -180,6 +185,8 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
       return toStepConfig(blankListPayload())
     case "send_template":
       return { template_name: "", language: "en_US" }
+    case "send_email":
+      return { template_id: "", subject: "", body_html: "" }
     case "add_tag":
     case "remove_tag":
       return { tag_id: "" }
@@ -625,6 +632,77 @@ function SendTemplateFields({
         )}
       </select>
     </FieldBlock>
+  )
+}
+
+function SendEmailFields({
+  templateId,
+  subject,
+  bodyHtml,
+  onChange,
+}: {
+  templateId: string
+  subject: string
+  bodyHtml: string
+  onChange: (patch: Record<string, unknown>) => void
+  t: ReturnType<typeof useTranslations>
+}) {
+  const [templates, setTemplates] = useState<{ id: string; name: string; subject: string }[]>([])
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from("email_templates")
+      .select("id, name, subject")
+      .order("name")
+      .then(({ data }) => {
+        setTemplates(data ?? [])
+      })
+  }, [])
+
+  return (
+    <div className="space-y-3">
+      <FieldBlock label="Plantilla de correo">
+        <select
+          value={templateId}
+          onChange={(e) => {
+            const tmpl = templates.find((x) => x.id === e.target.value)
+            onChange({
+              template_id: e.target.value,
+              subject: tmpl?.subject || subject,
+            })
+          }}
+          className={SELECT_CLASS}
+        >
+          <option value="">-- Seleccionar plantilla --</option>
+          {templates.map((tmpl) => (
+            <option key={tmpl.id} value={tmpl.id}>
+              {tmpl.name} ({tmpl.subject})
+            </option>
+          ))}
+        </select>
+      </FieldBlock>
+      {!templateId && (
+        <>
+          <FieldBlock label="Asunto">
+            <Input
+              value={subject}
+              onChange={(e) => onChange({ subject: e.target.value })}
+              placeholder="Asunto del correo"
+              className="bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label="Cuerpo HTML">
+            <Textarea
+              value={bodyHtml}
+              onChange={(e) => onChange({ body_html: e.target.value })}
+              placeholder="<p>Hola {{contact.name}}...</p>"
+              className="min-h-20 bg-muted font-mono text-xs text-foreground"
+            />
+          </FieldBlock>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -1335,6 +1413,16 @@ function StepEditor({
           t={t}
         />
       )
+    case "send_email":
+      return (
+        <SendEmailFields
+          templateId={(cfg.template_id as string) ?? ""}
+          subject={(cfg.subject as string) ?? ""}
+          bodyHtml={(cfg.body_html as string) ?? ""}
+          onChange={(patch) => set(patch)}
+          t={t}
+        />
+      )
     case "add_tag":
     case "remove_tag":
       return (
@@ -1537,6 +1625,8 @@ function previewFor(step: BuilderStep): string {
       return interactivePayloadPreviewText(asInteractive(step.step_config)) || "no body yet"
     case "send_template":
       return (step.step_config.template_name as string) || "pick a template"
+    case "send_email":
+      return (step.step_config.subject as string) || "plantilla de correo"
     case "wait":
       return `${step.step_config.amount ?? "?"} ${step.step_config.unit ?? ""}`
     case "condition":

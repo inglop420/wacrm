@@ -915,6 +915,7 @@
         "send_buttons": "Send Buttons",
         "send_list": "Send List",
         "send_template": "Send Template",
+        "send_email": "Send Email (Template)",
         "add_tag": "Add Tag",
         "remove_tag": "Remove Tag",
         "assign_conversation": "Assign Conversation",
@@ -941,6 +942,14 @@
         "interactive_reply": {
           "label": "Button / List Reply",
           "hint": "Customer taps a button or list row whose id matches — chain menus across automations"
+        },
+        "deal_stage_changed": {
+          "label": "Deal Changed Stage",
+          "hint": "When a deal moves to a different pipeline stage"
+        },
+        "deal_created": {
+          "label": "Deal Created",
+          "hint": "When a new deal is created in the pipeline"
         },
         "new_contact_created": {
           "label": "New Contact Created",
