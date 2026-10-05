@@ -47,14 +47,41 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true, ignored: true });
     }
 
-    const { error } = await db
+    const { data: updatedLogs, error } = await db
       .from('email_logs')
       .update(updateData)
-      .eq('resend_email_id', emailId);
+      .eq('resend_email_id', emailId)
+      .select('broadcast_id, contact_id, status');
 
     if (error) {
       console.error('[webhooks/resend] Failed to update email_logs:', error.message);
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+
+    // Sync with broadcast_recipients if this email was part of a broadcast campaign
+    if (updatedLogs && updatedLogs.length > 0) {
+      for (const log of updatedLogs) {
+        if (log.broadcast_id && log.contact_id) {
+          let recipientStatus: string | null = null;
+          if (updateData.status === 'delivered') recipientStatus = 'delivered';
+          else if (updateData.status === 'opened') recipientStatus = 'read';
+          else if (updateData.status === 'clicked') recipientStatus = 'replied';
+          else if (updateData.status === 'bounced' || updateData.status === 'failed') recipientStatus = 'failed';
+
+          if (recipientStatus) {
+            await db
+              .from('broadcast_recipients')
+              .update({
+                status: recipientStatus,
+                ...(recipientStatus === 'delivered' ? { delivered_at: new Date().toISOString() } : {}),
+                ...(recipientStatus === 'read' ? { read_at: new Date().toISOString() } : {}),
+                ...(recipientStatus === 'replied' ? { replied_at: new Date().toISOString() } : {}),
+              })
+              .eq('broadcast_id', log.broadcast_id)
+              .eq('contact_id', log.contact_id);
+          }
+        }
+      }
     }
 
     return NextResponse.json({ received: true, status: updateData.status });

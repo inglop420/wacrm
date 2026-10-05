@@ -8,6 +8,7 @@ export interface SendEmailOptions {
   html: string;
   text?: string;
   templateId?: string | null;
+  broadcastId?: string | null;
   contactId?: string | null;
   dealId?: string | null;
   replyTo?: string | null;
@@ -136,6 +137,7 @@ export async function sendEmailWithResend(
       .from('email_logs')
       .insert({
         account_id: options.accountId,
+        broadcast_id: options.broadcastId || null,
         template_id: options.templateId || null,
         contact_id: options.contactId || null,
         deal_id: options.dealId || null,
@@ -177,6 +179,7 @@ async function recordFailedLog(
     .from('email_logs')
     .insert({
       account_id: options.accountId,
+      broadcast_id: options.broadcastId || null,
       template_id: options.templateId || null,
       contact_id: options.contactId || null,
       deal_id: options.dealId || null,

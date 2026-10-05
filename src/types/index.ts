@@ -423,6 +423,9 @@ export interface Broadcast {
   audience_filter?: Record<string, unknown>;
   scheduled_at?: string;
   status: BroadcastStatus;
+  channel?: 'whatsapp' | 'email';
+  email_template_id?: string | null;
+  email_subject?: string | null;
   total_recipients: number;
   sent_count: number;
   delivered_count: number;
@@ -758,6 +761,7 @@ export type EmailDeliveryStatus =
 export interface EmailLog {
   id: string;
   account_id: string;
+  broadcast_id?: string | null;
   template_id?: string | null;
   contact_id?: string | null;
   deal_id?: string | null;

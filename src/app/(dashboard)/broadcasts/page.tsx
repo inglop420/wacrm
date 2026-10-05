@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Radio, Plus, Loader2 } from 'lucide-react';
+import { Radio, Plus, Loader2, Mail, MessageCircle } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
@@ -94,6 +94,20 @@ export default function BroadcastsPage() {
     () => broadcasts.some((b) => b.status === 'sending'),
     [broadcasts],
   );
+
+  const [channelTab, setChannelTab] = useState<'whatsapp' | 'email'>('whatsapp');
+
+  const whatsappBroadcasts = useMemo(
+    () => broadcasts.filter((b) => b.channel !== 'email'),
+    [broadcasts],
+  );
+
+  const emailBroadcasts = useMemo(
+    () => broadcasts.filter((b) => b.channel === 'email'),
+    [broadcasts],
+  );
+
+  const displayedBroadcasts = channelTab === 'whatsapp' ? whatsappBroadcasts : emailBroadcasts;
 
   useEffect(() => {
     function startPolling() {
@@ -180,40 +194,123 @@ export default function BroadcastsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {t('subtitle')}
           </p>
         </div>
-        <GatedButton
-          canAct={canCreate}
-          gateReason="create broadcasts"
-          onClick={() => router.push('/broadcasts/new')}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          {t('newBroadcast')}
-        </GatedButton>
+        <div className="flex items-center gap-2">
+          {channelTab === 'whatsapp' ? (
+            <GatedButton
+              canAct={canCreate}
+              gateReason="create broadcasts"
+              onClick={() => router.push('/broadcasts/new')}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              {t('newBroadcast')}
+            </GatedButton>
+          ) : (
+            <GatedButton
+              canAct={canCreate}
+              gateReason="create email broadcasts"
+              onClick={() => router.push('/broadcasts/new-email')}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-xs"
+            >
+              <Plus className="h-4 w-4" />
+              Nueva difusión de correo
+            </GatedButton>
+          )}
+        </div>
       </div>
 
-      {broadcasts.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-border bg-card">
-          <Radio className="mb-3 h-10 w-10 text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground">{t('noBroadcastsYet')}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t('createFirst')}
-          </p>
-          <GatedButton
-            canAct={canCreate}
-            gateReason="create broadcasts"
-            onClick={() => router.push('/broadcasts/new')}
-            className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
+      {/* Channel Switcher Tabs */}
+      <div className="flex items-center gap-2 border-b border-border pb-3">
+        <button
+          type="button"
+          onClick={() => setChannelTab('whatsapp')}
+          className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+            channelTab === 'whatsapp'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          <MessageCircle className="h-4 w-4" />
+          <span>WhatsApp</span>
+          <span
+            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
+              channelTab === 'whatsapp'
+                ? 'bg-primary-foreground/20 text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
+            }`}
           >
-            <Plus className="h-4 w-4" />
-            {t('newBroadcast')}
-          </GatedButton>
+            {whatsappBroadcasts.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setChannelTab('email')}
+          className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+            channelTab === 'email'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          <Mail className="h-4 w-4" />
+          <span>Correo Electrónico</span>
+          <span
+            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
+              channelTab === 'email'
+                ? 'bg-white/20 text-white'
+                : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            {emailBroadcasts.length}
+          </span>
+        </button>
+      </div>
+
+      {displayedBroadcasts.length === 0 ? (
+        <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-border bg-card p-6 text-center">
+          {channelTab === 'whatsapp' ? (
+            <>
+              <Radio className="mb-3 h-10 w-10 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">{t('noBroadcastsYet')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('createFirst')}
+              </p>
+              <GatedButton
+                canAct={canCreate}
+                gateReason="create broadcasts"
+                onClick={() => router.push('/broadcasts/new')}
+                className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                {t('newBroadcast')}
+              </GatedButton>
+            </>
+          ) : (
+            <>
+              <Mail className="mb-3 h-10 w-10 text-blue-500" />
+              <p className="text-sm font-medium text-foreground">Aún no hay difusiones de correo</p>
+              <p className="mt-1 text-xs text-muted-foreground max-w-sm">
+                Crea tu primera campaña masiva de correo para llegar a tus contactos con plantillas homologadas de LEGMA.
+              </p>
+              <GatedButton
+                canAct={canCreate}
+                gateReason="create email broadcasts"
+                onClick={() => router.push('/broadcasts/new-email')}
+                className="mt-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-xs"
+              >
+                <Plus className="h-4 w-4" />
+                Nueva difusión de correo
+              </GatedButton>
+            </>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
@@ -225,14 +322,23 @@ export default function BroadcastsPage() {
                 <TableHead className="hidden text-right text-muted-foreground sm:table-cell">
                   {t('table.recipients')}
                 </TableHead>
-                <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.delivery')}</TableHead>
-                <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.read')}</TableHead>
+                <TableHead className="hidden text-muted-foreground lg:table-cell">
+                  {channelTab === 'email' ? 'Entregados' : t('table.delivery')}
+                </TableHead>
+                <TableHead className="hidden text-muted-foreground lg:table-cell">
+                  {channelTab === 'email' ? 'Aperturas' : t('table.read')}
+                </TableHead>
+                {channelTab === 'email' && (
+                  <TableHead className="hidden text-muted-foreground lg:table-cell">
+                    Clics
+                  </TableHead>
+                )}
                 <TableHead className="text-muted-foreground">{t('table.status')}</TableHead>
                 <TableHead className="hidden text-muted-foreground sm:table-cell">{t('table.date')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {broadcasts.map((broadcast) => {
+              {displayedBroadcasts.map((broadcast) => {
                 const status = getBroadcastStatus(broadcast.status);
                 return (
                   <TableRow
@@ -241,7 +347,14 @@ export default function BroadcastsPage() {
                     onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
                   >
                     <TableCell className="font-medium text-foreground">
-                      {broadcast.name}
+                      <div className="flex items-center gap-2">
+                        {broadcast.channel === 'email' ? (
+                          <Mail className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                        ) : (
+                          <MessageCircle className="h-3.5 w-3.5 text-primary shrink-0" />
+                        )}
+                        <span>{broadcast.name}</span>
+                      </div>
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground md:table-cell">
                       {broadcast.template_name}
@@ -263,6 +376,15 @@ export default function BroadcastsPage() {
                         color="bg-blue-500"
                       />
                     </TableCell>
+                    {channelTab === 'email' && (
+                      <TableCell className="hidden lg:table-cell">
+                        <RateCell
+                          value={broadcast.replied_count}
+                          total={broadcast.total_recipients}
+                          color="bg-purple-500"
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}

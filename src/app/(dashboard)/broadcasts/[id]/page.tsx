@@ -34,7 +34,9 @@ import {
   Trash2,
   PlayCircle,
   RotateCcw,
+  Mail,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   getBroadcastStatus,
@@ -318,6 +320,7 @@ export default function BroadcastDetailPage() {
   }
 
   const status = getBroadcastStatus(broadcast.status);
+  const isEmail = broadcast.channel === 'email';
 
   const pendingCount = recipients.filter((r) => r.status === 'pending').length;
   const retryableCount = recipients.filter((r) => r.status === 'failed').length;
@@ -328,9 +331,9 @@ export default function BroadcastDetailPage() {
 
   const funnelSteps: FunnelStep[] = [
     { label: t('stats.sent'), value: broadcast.sent_count, color: 'bg-primary' },
-    { label: t('stats.delivered'), value: broadcast.delivered_count, color: 'bg-teal-500' },
-    { label: t('stats.read'), value: broadcast.read_count, color: 'bg-blue-500' },
-    { label: t('stats.replied'), value: broadcast.replied_count, color: 'bg-indigo-500' },
+    { label: isEmail ? 'Entregados' : t('stats.delivered'), value: broadcast.delivered_count, color: 'bg-teal-500' },
+    { label: isEmail ? 'Aperturas' : t('stats.read'), value: broadcast.read_count, color: 'bg-blue-500' },
+    { label: isEmail ? 'Clics' : t('stats.replied'), value: broadcast.replied_count, color: 'bg-indigo-500' },
   ];
 
   return (
@@ -347,8 +350,19 @@ export default function BroadcastDetailPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-2xl font-bold text-foreground">{broadcast.name}</h1>
+              <Badge
+                variant="outline"
+                className={`text-xs ${
+                  isEmail
+                    ? 'border-blue-500/30 text-blue-500 bg-blue-500/10'
+                    : 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10'
+                }`}
+              >
+                {isEmail ? <Mail className="h-3 w-3 mr-1" /> : null}
+                {isEmail ? 'Correo Electrónico (Resend)' : 'WhatsApp'}
+              </Badge>
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}
               >
@@ -475,21 +489,21 @@ export default function BroadcastDetailPage() {
           color="bg-primary/10 text-primary"
         />
         <StatCard
-          label={t('stats.delivered')}
+          label={isEmail ? 'Entregados' : t('stats.delivered')}
           value={broadcast.delivered_count}
           total={broadcast.total_recipients}
           icon={<CheckCheck className="h-4 w-4" />}
           color="bg-teal-500/10 text-teal-400"
         />
         <StatCard
-          label={t('stats.read')}
+          label={isEmail ? 'Aperturas' : t('stats.read')}
           value={broadcast.read_count}
           total={broadcast.total_recipients}
           icon={<Eye className="h-4 w-4" />}
           color="bg-blue-500/10 text-blue-400"
         />
         <StatCard
-          label={t('stats.replied')}
+          label={isEmail ? 'Clics' : t('stats.replied')}
           value={broadcast.replied_count}
           total={broadcast.total_recipients}
           icon={<MessageCircle className="h-4 w-4" />}
@@ -583,11 +597,11 @@ export default function BroadcastDetailPage() {
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground">{t('table.contact')}</TableHead>
-                  <TableHead className="text-muted-foreground">{t('table.phone')}</TableHead>
+                  <TableHead className="text-muted-foreground">{isEmail ? 'Correo' : t('table.phone')}</TableHead>
                   <TableHead className="text-muted-foreground">{t('table.status')}</TableHead>
                   <TableHead className="text-muted-foreground">{t('table.sent')}</TableHead>
                   <TableHead className="text-muted-foreground">{t('table.delivered')}</TableHead>
-                  <TableHead className="text-muted-foreground">{t('table.read')}</TableHead>
+                  <TableHead className="text-muted-foreground">{isEmail ? 'Apertura' : t('table.read')}</TableHead>
                   <TableHead className="text-muted-foreground">{t('table.error')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -600,7 +614,9 @@ export default function BroadcastDetailPage() {
                         {recipient.contact?.name ?? 'Unknown'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {recipient.contact?.phone ?? '-'}
+                        {isEmail
+                          ? (recipient.contact?.email ?? '-')
+                          : (recipient.contact?.phone ?? '-')}
                       </TableCell>
                       <TableCell>
                         <span
