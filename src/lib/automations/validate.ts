@@ -74,6 +74,11 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
         issues.push({ path: `${path}.template_name`, message: 'template name is required' })
       }
       break
+    case 'send_email':
+      if (!nonEmpty(c.template_id) && (!nonEmpty(c.subject) || !nonEmpty(c.body_html))) {
+        issues.push({ path: `${path}.template_id`, message: 'email template or subject/body is required' })
+      }
+      break
     case 'add_tag':
     case 'remove_tag':
       if (!nonEmpty(c.tag_id)) {

@@ -32,6 +32,12 @@ export const TRIGGER_META: Record<AutomationTriggerType, TriggerMeta> = {
   time_based: {
     pillClass: 'border-slate-500/30 bg-slate-500/10 text-muted-foreground',
   },
+  deal_stage_changed: {
+    pillClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  },
+  deal_created: {
+    pillClass: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300',
+  },
   interactive_reply: {
     pillClass: 'border-pink-500/30 bg-pink-500/10 text-pink-300',
   },

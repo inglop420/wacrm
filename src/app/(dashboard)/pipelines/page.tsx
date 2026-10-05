@@ -217,6 +217,8 @@ export default function PipelinesPage() {
   const handleDealMoved = useCallback(
     async (dealId: string, newStageId: string) => {
       // Optimistic update — board already animated; just persist.
+      const deal = deals.find((d) => d.id === dealId);
+      const previousStageId = deal?.stage_id;
       setDeals((prev) =>
         prev.map((d) => (d.id === dealId ? { ...d, stage_id: newStageId } : d)),
       );
@@ -227,9 +229,27 @@ export default function PipelinesPage() {
       if (error) {
         toast.error(t("toastFailedMoveDeal"));
         refreshDeals();
+      } else if (deal && accountId) {
+        // Fire deal_stage_changed automation trigger in background
+        fetch("/api/automations/engine", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trigger_type: "deal_stage_changed",
+            contact_id: deal.contact_id || null,
+            context: {
+              deal_id: dealId,
+              pipeline_id: selectedPipelineId,
+              stage_id: newStageId,
+              previous_stage_id: previousStageId,
+            },
+          }),
+        }).catch((err) =>
+          console.error("Failed to trigger deal automation:", err),
+        );
       }
     },
-    [supabase, refreshDeals, t],
+    [supabase, refreshDeals, t, deals, accountId, selectedPipelineId],
   );
 
   const handleAddDeal = useCallback(

@@ -7,16 +7,19 @@ import type {
   KeywordMatchTriggerConfig,
   InteractiveReplyTriggerConfig,
   TagTriggerConfig,
+  DealStageChangedTriggerConfig,
   SendMessageStepConfig,
   SendButtonsStepConfig,
   SendListStepConfig,
   SendTemplateStepConfig,
+  SendEmailStepConfig,
   SendWebhookStepConfig,
   TagStepConfig,
   UpdateContactFieldStepConfig,
   WaitStepConfig,
   CreateDealStepConfig,
   AssignConversationStepConfig,
+  Deal,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
@@ -24,6 +27,7 @@ import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { sendEmailWithResend, interpolateEmailTemplate } from '@/lib/email/resend'
 
 // ------------------------------------------------------------
 // Public API
@@ -42,6 +46,14 @@ export interface AutomationContext {
   agent_id?: string
   /** Button / list-row id the customer tapped, for interactive_reply. */
   interactive_reply_id?: string
+  /** Deal ID, for deal_stage_changed / deal_created triggers. */
+  deal_id?: string
+  /** Target or current pipeline ID. */
+  pipeline_id?: string
+  /** Target or current stage ID. */
+  stage_id?: string
+  /** Previous stage ID before move. */
+  previous_stage_id?: string
 }
 
 export interface DispatchInput {
@@ -456,6 +468,76 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       return `template sent via Meta (${whatsapp_message_id})`
     }
 
+    case 'send_email': {
+      const cfg = step.step_config as SendEmailStepConfig
+      if (!args.contactId) throw new Error('send_email needs a contact')
+
+      const { data: contact } = await db
+        .from('contacts')
+        .select('*')
+        .eq('id', args.contactId)
+        .eq('account_id', args.automation.account_id)
+        .maybeSingle()
+
+      if (!contact?.email) {
+        return 'contact has no email address'
+      }
+
+      let deal: Deal | null = null
+      if (args.context.deal_id) {
+        const { data: dealData } = await db
+          .from('deals')
+          .select('*')
+          .eq('id', args.context.deal_id)
+          .eq('account_id', args.automation.account_id)
+          .maybeSingle()
+        deal = dealData as Deal | null
+      }
+
+      let subject = cfg.subject || ''
+      let bodyHtml = cfg.body_html || ''
+      let templateId: string | null = null
+
+      if (cfg.template_id) {
+        const { data: tmpl } = await db
+          .from('email_templates')
+          .select('*')
+          .eq('id', cfg.template_id)
+          .eq('account_id', args.automation.account_id)
+          .maybeSingle()
+
+        if (tmpl) {
+          templateId = tmpl.id
+          subject = tmpl.subject
+          bodyHtml = tmpl.body_html
+        }
+      }
+
+      if (!subject || !bodyHtml) {
+        return 'no email content or template configured'
+      }
+
+      const finalSubject = interpolateEmailTemplate(subject, { contact, deal, vars: args.context.vars })
+      const finalHtml = interpolateEmailTemplate(bodyHtml, { contact, deal, vars: args.context.vars })
+
+      const sendResult = await sendEmailWithResend({
+        accountId: args.automation.account_id,
+        to: contact.email,
+        subject: finalSubject,
+        html: finalHtml,
+        templateId,
+        contactId: args.contactId,
+        dealId: deal?.id || null,
+        replyTo: cfg.reply_to || null,
+      })
+
+      if (!sendResult.ok) {
+        throw new Error(`email send failed: ${sendResult.error}`)
+      }
+
+      return `email sent to ${contact.email} (${sendResult.resendId})`
+    }
+
     case 'add_tag': {
       const cfg = step.step_config as TagStepConfig
       if (!args.contactId || !cfg.tag_id) throw new Error('add_tag needs contact + tag_id')
@@ -768,6 +850,28 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
     const cfg = automation.trigger_config as TagTriggerConfig
     const tagId = ctx?.tag_id
     return Boolean(tagId && cfg?.tag_id && cfg.tag_id === tagId)
+  }
+
+  if (automation.trigger_type === 'deal_stage_changed') {
+    const cfg = automation.trigger_config as DealStageChangedTriggerConfig
+    if (cfg?.pipeline_id && ctx?.pipeline_id && cfg.pipeline_id !== ctx.pipeline_id) {
+      return false
+    }
+    if (cfg?.stage_id && ctx?.stage_id && cfg.stage_id !== ctx.stage_id) {
+      return false
+    }
+    return true
+  }
+
+  if (automation.trigger_type === 'deal_created') {
+    const cfg = automation.trigger_config as DealStageChangedTriggerConfig
+    if (cfg?.pipeline_id && ctx?.pipeline_id && cfg.pipeline_id !== ctx.pipeline_id) {
+      return false
+    }
+    if (cfg?.stage_id && ctx?.stage_id && cfg.stage_id !== ctx.stage_id) {
+      return false
+    }
+    return true
   }
 
   return true

@@ -482,6 +482,8 @@ export type AutomationTriggerType =
   | 'conversation_assigned'
   | 'tag_added'
   | 'time_based'
+  | 'deal_stage_changed'
+  | 'deal_created'
   /** Customer tapped a reply button / list row whose id matches; lets
    *  multi-step menus be chained across automations. */
   | 'interactive_reply';
@@ -491,6 +493,7 @@ export type AutomationStepType =
   | 'send_buttons'
   | 'send_list'
   | 'send_template'
+  | 'send_email'
   | 'add_tag'
   | 'remove_tag'
   | 'assign_conversation'
@@ -502,6 +505,18 @@ export type AutomationStepType =
   | 'close_conversation';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
+
+export interface DealStageChangedTriggerConfig {
+  pipeline_id?: string;
+  stage_id?: string;
+}
+
+export interface SendEmailStepConfig {
+  template_id?: string;
+  subject?: string;
+  body_html?: string;
+  reply_to?: string;
+}
 
 export interface KeywordMatchTriggerConfig {
   keywords: string[];
@@ -538,6 +553,7 @@ export type AutomationTriggerConfig =
   | TagTriggerConfig
   | TimeBasedTriggerConfig
   | InteractiveReplyTriggerConfig
+  | DealStageChangedTriggerConfig
   | Record<string, unknown>;
 
 export interface SendMessageStepConfig {
@@ -617,6 +633,7 @@ export type AutomationStepConfig =
   | SendButtonsStepConfig
   | SendListStepConfig
   | SendTemplateStepConfig
+  | SendEmailStepConfig
   | TagStepConfig
   | AssignConversationStepConfig
   | UpdateContactFieldStepConfig
@@ -698,4 +715,63 @@ export interface QuickReply {
   interactive_payload?: InteractiveMessagePayload | null;
   created_at: string;
   updated_at: string;
+}
+
+// ============================================================
+// Email Module (Resend & Automation)
+// ============================================================
+
+export interface EmailConfig {
+  id: string;
+  account_id: string;
+  resend_api_key?: string | null;
+  from_name: string;
+  from_email: string;
+  reply_to_email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailTemplate {
+  id: string;
+  account_id: string;
+  user_id?: string | null;
+  name: string;
+  subject: string;
+  body_html: string;
+  body_text?: string | null;
+  variables?: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EmailDeliveryStatus =
+  | 'queued'
+  | 'sent'
+  | 'delivered'
+  | 'opened'
+  | 'clicked'
+  | 'bounced'
+  | 'failed';
+
+export interface EmailLog {
+  id: string;
+  account_id: string;
+  template_id?: string | null;
+  contact_id?: string | null;
+  deal_id?: string | null;
+  recipient_email: string;
+  sender_email: string;
+  reply_to_email?: string | null;
+  subject: string;
+  resend_email_id?: string | null;
+  status: EmailDeliveryStatus;
+  error_message?: string | null;
+  opened_at?: string | null;
+  clicked_at?: string | null;
+  created_at: string;
+  template?: EmailTemplate;
+  contact?: Contact;
+  deal?: Deal;
 }
