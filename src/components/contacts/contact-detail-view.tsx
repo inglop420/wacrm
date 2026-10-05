@@ -11,6 +11,7 @@ import {
   TemplatePicker,
   type TemplateSendValues,
 } from '@/components/inbox/template-picker';
+import { SendEmailDialog } from './send-email-dialog';
 import {
   Sheet,
   SheetContent,
@@ -70,6 +71,7 @@ export function ContactDetailView({
   // find-or-creates the conversation, so no inbound message is required.
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
 
   // Details tab
   const [editName, setEditName] = useState('');
@@ -444,7 +446,7 @@ export function ContactDetailView({
                   </div>
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <Button
                   size="sm"
                   onClick={() => setTemplatePickerOpen(true)}
@@ -457,6 +459,16 @@ export function ContactDetailView({
                     <LayoutTemplate className="size-4" />
                   )}
                   {t('sendTemplateBtn')}
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEmailDialogOpen(true)}
+                  className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+                >
+                  <Mail className="size-4" />
+                  Enviar correo
                 </Button>
               </div>
             </SheetHeader>
@@ -765,6 +777,15 @@ export function ContactDetailView({
       open={templatePickerOpen}
       onOpenChange={setTemplatePickerOpen}
       onSelect={handleSendTemplate}
+    />
+    <SendEmailDialog
+      open={emailDialogOpen}
+      onOpenChange={setEmailDialogOpen}
+      contact={contact}
+      onEmailSent={() => {
+        fetchContact();
+        onUpdated();
+      }}
     />
     </>
   );
