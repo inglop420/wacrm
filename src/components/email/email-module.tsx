@@ -27,27 +27,10 @@ import type { EmailConfig, EmailTemplate, EmailLog } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-
-const DYNAMIC_VARIABLES = [
-  { label: 'Nombre contacto', tag: '{{contact.name}}' },
-  { label: 'Empresa', tag: '{{contact.company}}' },
-  { label: 'Correo', tag: '{{contact.email}}' },
-  { label: 'Teléfono', tag: '{{contact.phone}}' },
-  { label: 'Título del Trato', tag: '{{deal.title}}' },
-  { label: 'Valor del Trato', tag: '{{deal.value}}' },
-];
+import { EmailTemplateDialog } from './email-template-dialog';
 
 export function EmailModule() {
   const { accountId, user } = useAuth();
@@ -60,12 +43,6 @@ export function EmailModule() {
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
-  const [templateForm, setTemplateForm] = useState({
-    name: '',
-    subject: '',
-    body_html: '',
-  });
-  const [previewMode, setPreviewMode] = useState<'edit' | 'preview'>('edit');
   const [savingTemplate, setSavingTemplate] = useState(false);
 
   // Config state
@@ -219,43 +196,45 @@ export function EmailModule() {
   // Open Template Modal
   function handleOpenCreateTemplate() {
     setEditingTemplate(null);
-    setTemplateForm({
-      name: '',
-      subject: '',
-      body_html: `<h2>Hola {{contact.name}},</h2>\n<p>Gracias por tu interés en nuestras soluciones.</p>\n<p>Hemos preparado una propuesta especial para {{contact.company}}.</p>\n<p>Quedamos atentos a tus comentarios.</p>\n<p>Saludos cordiales,<br><strong>Equipo LEGMA</strong></p>`,
-    });
-    setPreviewMode('edit');
     setTemplateModalOpen(true);
   }
 
   function handleOpenEditTemplate(tmpl: EmailTemplate) {
     setEditingTemplate(tmpl);
-    setTemplateForm({
-      name: tmpl.name,
-      subject: tmpl.subject,
-      body_html: tmpl.body_html,
-    });
-    setPreviewMode('edit');
     setTemplateModalOpen(true);
   }
 
-  // Save Template
-  async function handleSaveTemplate() {
-    if (!templateForm.name.trim() || !templateForm.subject.trim() || !templateForm.body_html.trim()) {
-      toast.error('Por favor completa todos los campos requeridos');
-      return;
-    }
+  // Duplicate Template
+  async function handleDuplicateTemplate(tmpl: EmailTemplate) {
     if (!accountId) return;
+    const { error } = await supabase.from('email_templates').insert({
+      account_id: accountId,
+      user_id: user?.id || null,
+      name: `${tmpl.name} (Copia)`,
+      subject: tmpl.subject,
+      body_html: tmpl.body_html,
+      is_active: true,
+    });
+    if (error) {
+      toast.error('Error al duplicar plantilla: ' + error.message);
+    } else {
+      toast.success('Plantilla duplicada con éxito');
+      loadTemplates();
+    }
+  }
 
+  // Save Template
+  async function handleSaveTemplate(templateData: { name: string; subject: string; body_html: string }) {
+    if (!accountId) return;
     setSavingTemplate(true);
 
     if (editingTemplate) {
       const { error } = await supabase
         .from('email_templates')
         .update({
-          name: templateForm.name,
-          subject: templateForm.subject,
-          body_html: templateForm.body_html,
+          name: templateData.name,
+          subject: templateData.subject,
+          body_html: templateData.body_html,
           updated_at: new Date().toISOString(),
         })
         .eq('id', editingTemplate.id);
@@ -272,9 +251,9 @@ export function EmailModule() {
       const { error } = await supabase.from('email_templates').insert({
         account_id: accountId,
         user_id: user?.id || null,
-        name: templateForm.name,
-        subject: templateForm.subject,
-        body_html: templateForm.body_html,
+        name: templateData.name,
+        subject: templateData.subject,
+        body_html: templateData.body_html,
         is_active: true,
       });
 
@@ -300,15 +279,6 @@ export function EmailModule() {
       toast.success('Plantilla eliminada');
       loadTemplates();
     }
-  }
-
-  // Insert variable into active editor field
-  function insertVariable(tag: string) {
-    setTemplateForm((prev) => ({
-      ...prev,
-      body_html: prev.body_html + ` ${tag}`,
-    }));
-    toast.info(`Variable ${tag} añadida al cuerpo`);
   }
 
   // Filtered logs
@@ -436,6 +406,16 @@ export function EmailModule() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          title="Duplicar plantilla"
+                          onClick={() => handleDuplicateTemplate(tmpl)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          title="Editar plantilla"
                           onClick={() => handleOpenEditTemplate(tmpl)}
                         >
                           <Edit2 className="h-4 w-4" />
@@ -444,6 +424,7 @@ export function EmailModule() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          title="Eliminar plantilla"
                           onClick={() => handleDeleteTemplate(tmpl.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -694,111 +675,31 @@ export function EmailModule() {
       </Tabs>
 
       {/* ==================================================== */}
-      {/* MODAL: CREAR / EDITAR PLANTILLA                    */}
+      {/* MODAL: CREADOR / EDITOR CORPORATIVO LEGMA          */}
       {/* ==================================================== */}
-      <Dialog open={templateModalOpen} onOpenChange={setTemplateModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingTemplate ? 'Editar Plantilla de Correo' : 'Nueva Plantilla de Correo'}</DialogTitle>
-            <DialogDescription>
-              Personaliza el contenido del correo. Usa las variables dinámicas para insertar datos del cliente.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="t_name">Nombre de la Plantilla</Label>
-              <Input
-                id="t_name"
-                placeholder="Ej. Seguimiento Cotización Enviada"
-                value={templateForm.name}
-                onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="t_subject">Asunto del Correo</Label>
-              <Input
-                id="t_subject"
-                placeholder="Ej. Hola {{contact.name}}, propuesta especial para {{contact.company}}"
-                value={templateForm.subject}
-                onChange={(e) => setTemplateForm({ ...templateForm, subject: e.target.value })}
-              />
-            </div>
-
-            {/* Variable Pills */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Variables Rápidas (Haz clic para insertar):</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {DYNAMIC_VARIABLES.map((v) => (
-                  <button
-                    key={v.tag}
-                    type="button"
-                    onClick={() => insertVariable(v.tag)}
-                    className="inline-flex items-center rounded-md border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground hover:bg-primary/20 hover:border-primary/40 transition-colors"
-                  >
-                    + {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Editor vs Preview Mode Switch */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="t_body">Cuerpo del Correo (HTML / Formato)</Label>
-                <div className="flex items-center rounded-md border p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setPreviewMode('edit')}
-                    className={`px-2.5 py-1 rounded ${previewMode === 'edit' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-                  >
-                    Editor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewMode('preview')}
-                    className={`px-2.5 py-1 rounded ${previewMode === 'preview' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-                  >
-                    Vista Previa
-                  </button>
-                </div>
-              </div>
-
-              {previewMode === 'edit' ? (
-                <Textarea
-                  id="t_body"
-                  rows={9}
-                  className="font-mono text-xs leading-relaxed"
-                  placeholder="Escribe el cuerpo del correo en HTML o texto enriquecido..."
-                  value={templateForm.body_html}
-                  onChange={(e) => setTemplateForm({ ...templateForm, body_html: e.target.value })}
-                />
-              ) : (
-                <div
-                  className="rounded-md border p-4 bg-background min-h-[200px] text-sm prose dark:prose-invert max-w-none"
-                  dangerouslySetInnerHTML={{
-                    __html: templateForm.body_html
-                      .replace(/\{\{contact\.name\}\}/g, 'Juan Pérez')
-                      .replace(/\{\{contact\.company\}\}/g, 'Empresa Ejemplo S.A.')
-                      .replace(/\{\{deal\.title\}\}/g, 'Servicio CRM Anual')
-                      .replace(/\{\{deal\.value\}\}/g, '$12,500 MXN'),
-                  }}
-                />
-              )}
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setTemplateModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveTemplate} disabled={savingTemplate}>
-              {savingTemplate ? 'Guardando...' : editingTemplate ? 'Actualizar Plantilla' : 'Guardar Plantilla'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EmailTemplateDialog
+        open={templateModalOpen}
+        onOpenChange={setTemplateModalOpen}
+        editingTemplate={editingTemplate}
+        onSave={handleSaveTemplate}
+        saving={savingTemplate}
+        defaultSenderEmail={configForm.from_email}
+        defaultSenderName={configForm.from_name}
+        onSendTest={async (toEmail, subject, html) => {
+          const res = await fetch('/api/email/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: toEmail,
+              from: `${configForm.from_name} <${configForm.from_email}>`,
+              reply_to: configForm.reply_to_email,
+              subject,
+              html,
+            }),
+          });
+          return res.ok;
+        }}
+      />
     </div>
   );
 }
