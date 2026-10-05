@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Contact, EmailTemplate, Tag, Pipeline, Stage } from '@/types';
+import type { Contact, EmailTemplate, Tag, Pipeline, PipelineStage } from '@/types';
 import { interpolateEmailTemplate } from '@/lib/email/resend';
 
 const STEPS = [
@@ -62,7 +62,7 @@ export default function NewEmailBroadcastPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [stages, setStages] = useState<Stage[]>([]);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
   const [selectedStageId, setSelectedStageId] = useState<string>('');
 
   const [audienceContacts, setAudienceContacts] = useState<Contact[]>([]);
@@ -104,7 +104,7 @@ export default function NewEmailBroadcastPage() {
       }
       if (tagsRes.data) setTags(tagsRes.data as Tag[]);
       if (pipelinesRes.data) setPipelines(pipelinesRes.data as Pipeline[]);
-      if (stagesRes.data) setStages(stagesRes.data as Stage[]);
+      if (stagesRes.data) setStages(stagesRes.data as PipelineStage[]);
 
       setLoadingTemplates(false);
     }
@@ -547,7 +547,10 @@ export default function NewEmailBroadcastPage() {
             {audienceType === 'stage' && (
               <div className="p-4 rounded-xl border bg-muted/20 space-y-3">
                 <Label className="text-xs font-semibold">Selecciona la Etapa del Pipeline:</Label>
-                <Select value={selectedStageId} onValueChange={setSelectedStageId}>
+                <Select
+                  value={selectedStageId}
+                  onValueChange={(val) => setSelectedStageId(val || '')}
+                >
                   <SelectTrigger className="h-9 text-xs bg-background">
                     <SelectValue placeholder="Elige la etapa..." />
                   </SelectTrigger>
