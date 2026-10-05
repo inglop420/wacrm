@@ -347,10 +347,10 @@ export function EmailTemplateDialog({
                   if (val) handleSelectPreset(val);
                 }}
               >
-                <SelectTrigger className="h-7 sm:h-8 w-full sm:w-[220px] text-xs">
+                <SelectTrigger className="h-7 sm:h-8 w-full sm:w-[270px] min-w-[210px] text-xs">
                   <SelectValue placeholder="Elegir modelo corporativo" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-[300px] sm:w-[330px] max-w-[90vw]">
                   {LEGMA_PRESETS.map((p) => (
                     <SelectItem key={p.id} value={p.id} className="text-xs">
                       <div className="flex items-center gap-1.5">
@@ -583,6 +583,65 @@ export function EmailTemplateDialog({
                           );
                         })}
                       </div>
+                    </div>
+
+                    {/* Logo Corporativo Controls */}
+                    <div className="pt-2 border-t space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="has_logo" className="text-xs font-semibold cursor-pointer">
+                            Mostrar Logo Oficial LEGMA
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Inserta el isotipo oficial en la parte superior de la cabecera.
+                          </p>
+                        </div>
+                        <Switch
+                          id="has_logo"
+                          checked={builderData.hasLogo !== false}
+                          onCheckedChange={(c) => setBuilderData({ ...builderData, hasLogo: c })}
+                        />
+                      </div>
+
+                      {builderData.hasLogo !== false && (
+                        <div className="space-y-2 rounded-lg bg-background/60 border p-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-muted-foreground">
+                              Variante de Logo:
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() =>
+                                  setBuilderData({ ...builderData, logoUrl: 'https://crm.legma.com.mx/LogoW.png' })
+                                }
+                              >
+                                Blanco (Oficial)
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() =>
+                                  setBuilderData({ ...builderData, logoUrl: 'https://crm.legma.com.mx/logo.png' })
+                                }
+                              >
+                                Color Completo
+                              </Button>
+                            </div>
+                          </div>
+                          <Input
+                            value={builderData.logoUrl || 'https://crm.legma.com.mx/LogoW.png'}
+                            onChange={(e) => setBuilderData({ ...builderData, logoUrl: e.target.value })}
+                            placeholder="https://crm.legma.com.mx/LogoW.png"
+                            className="h-7 text-xs font-mono"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 

@@ -16,6 +16,8 @@ export interface LegmaTemplateData {
   presetId?: string;
   name: string;
   subject: string;
+  hasLogo?: boolean;
+  logoUrl?: string;
   headerTitle: string;
   headerSubtitle: string;
   gradient: GradientTheme;
@@ -144,6 +146,8 @@ export const LEGMA_PRESETS: Array<{
     badge: 'Institucional',
     data: {
       presetId: 'legma-bienvenida',
+      hasLogo: true,
+      logoUrl: 'https://crm.legma.com.mx/LogoW.png',
       name: 'Bienvenida a LEGMA con Credenciales',
       subject: '¡Bienvenido a LEGMA, {{contact.name}}! Tus accesos a la plataforma',
       headerTitle: 'LEGMA',
@@ -188,12 +192,68 @@ export const LEGMA_PRESETS: Array<{
     },
   },
   {
+    id: 'legma-webinar',
+    name: 'Invitación a Webinar LegalTech',
+    description: 'Invitación a masterclass o webinar en vivo para leads y clientes sobre IA y automatización legal.',
+    badge: 'Webinar',
+    data: {
+      presetId: 'legma-webinar',
+      hasLogo: true,
+      logoUrl: 'https://crm.legma.com.mx/LogoW.png',
+      name: 'Invitación a Webinar de Inteligencia Artificial Legal',
+      subject: '🎓 Masterclass en Vivo: Cómo Automatizar tu Despacho Legal con IA - Exclusivo para {{contact.company}}',
+      headerTitle: 'LEGMA',
+      headerSubtitle: 'Masterclass Online • LegalTech e Inteligencia Artificial',
+      gradient: 'purple',
+      greeting: 'Hola {{contact.name}}, te invitamos a nuestra próxima Masterclass en vivo 🚀',
+      introParagraph: 'En un entorno jurídico cada vez más competitivo, los despachos que integran inteligencia artificial procesal resuelven sus acuerdos y escritos en la mitad del tiempo. Queremos invitarte a ti y a tu equipo de <strong>{{contact.company}}</strong> a una masterclass en vivo y 100% práctica.',
+      hasCallout: true,
+      calloutTheme: 'purple',
+      calloutTitle: '📅 Detalles del Webinar Exclusivo',
+      calloutRows: [
+        { label: 'Tema', value: 'Automatización Procesal y Monitoreo de Acuerdos con IA' },
+        { label: 'Modalidad', value: 'En vivo vía Zoom / Meet (Cupo limitado)' },
+        { label: 'Fecha y Hora', value: 'Próximo Jueves • 18:00 hrs (Hora CDMX)' },
+      ],
+      calloutHighlightLabel: 'Pase de cortesía para tu despacho:',
+      calloutHighlightValue: 'Registro 100% Gratuito',
+      calloutFooterNote: '⚡ La sesión incluirá ronda interactiva de preguntas y respuestas en vivo con nuestros especialistas.',
+      hasFeatures: true,
+      featuresTitle: 'En esta sesión aprenderás en vivo:',
+      features: [
+        {
+          emoji: '⚖️',
+          title: 'Monitoreo de Acuerdos sin Estrés',
+          description: 'Aprende a recibir alertas automáticas del Boletín Judicial sin perder tiempo en revisiones manuales.',
+        },
+        {
+          emoji: '🤖',
+          title: 'Redacción y Análisis Jurídico con IA',
+          description: 'Descubre cómo generar proyectos de demandas, contestaciones y localización de tesis en segundos.',
+        },
+        {
+          emoji: '🎁',
+          title: 'Beneficio Exclusivo a Asistentes',
+          description: 'Todos los asistentes recibirán acceso de prueba extendido a la plataforma LEGMA.',
+        },
+      ],
+      hasCta: true,
+      ctaText: 'Apartar mi Lugar en el Webinar (Gratis)',
+      ctaUrl: 'https://crm.legma.com.mx/webinar',
+      closingNote: '¿No podrás conectarte a esa hora? Regístrate de todos modos y te enviaremos la grabación completa a tu correo.',
+      footerSentToNote: 'Invitación dirigida a {{contact.email}}.',
+      footerCopyright: '© 2026 LEGMA - Legal Manager Asistente. Todos los derechos reservados.',
+    },
+  },
+  {
     id: 'legma-propuesta',
     name: 'Propuesta Comercial & Cotización',
     description: 'Enfocada en el cierre comercial: incluye detalles de la cotización, valor acordado y enlace a la propuesta.',
     badge: 'Ventas',
     data: {
       presetId: 'legma-propuesta',
+      hasLogo: true,
+      logoUrl: 'https://crm.legma.com.mx/LogoW.png',
       name: 'Envío de Propuesta Comercial',
       subject: 'Propuesta de Solución Legal Tech para {{contact.company}} - LEGMA',
       headerTitle: 'LEGMA',
@@ -246,6 +306,8 @@ export const LEGMA_PRESETS: Array<{
     badge: 'Prospección',
     data: {
       presetId: 'legma-demo',
+      hasLogo: true,
+      logoUrl: 'https://crm.legma.com.mx/LogoW.png',
       name: 'Invitación a Demostración en Vivo',
       subject: '¿Agendamos una breve demostración de LEGMA para {{contact.company}}?',
       headerTitle: 'LEGMA',
@@ -292,6 +354,8 @@ export const LEGMA_PRESETS: Array<{
     badge: 'Alertas',
     data: {
       presetId: 'legma-alerta',
+      hasLogo: true,
+      logoUrl: 'https://crm.legma.com.mx/LogoW.png',
       name: 'Notificación de Boletín Judicial',
       subject: '⚖️ Alerta de Boletín Judicial: Nuevo acuerdo en expediente {{deal.title}}',
       headerTitle: 'LEGMA',
@@ -469,8 +533,15 @@ export function generateLegmaHtml(data: LegmaTemplateData): string {
                 <table role="presentation" style="max-width: 600px; width: 100%; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-collapse: collapse;">
                     <!-- Header -->
                     <tr>
-                        <td style="background: ${gradientInfo.css}; padding: 38px 28px; text-align: center;">
-                            <h1 style="margin: 0; color: #ffffff; font-size: 30px; font-weight: 700; letter-spacing: -0.5px;">${data.headerTitle}</h1>
+                        <td style="background: ${gradientInfo.css}; padding: 36px 28px; text-align: center;">
+                            ${
+                              data.hasLogo !== false
+                                ? `<div style="text-align: center; margin-bottom: 14px;">
+                                <img src="${data.logoUrl || 'https://crm.legma.com.mx/LogoW.png'}" alt="${data.headerTitle}" width="54" height="54" style="display: block; margin: 0 auto; border: 0; outline: none; width: 54px; height: 54px; object-fit: contain;" />
+                            </div>`
+                                : ''
+                            }
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">${data.headerTitle}</h1>
                             ${
                               data.headerSubtitle
                                 ? `<p style="margin: 8px 0 0 0; color: #e0e7ff; font-size: 15px; font-weight: 400;">${data.headerSubtitle}</p>`
