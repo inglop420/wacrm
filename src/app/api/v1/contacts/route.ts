@@ -124,6 +124,32 @@ export async function POST(request: Request) {
       }
     );
 
+    // If the contact already existed by phone, update any provided fields
+    // so new details (like email or name from a web form) aren't silently lost.
+    if (!created) {
+      const updates: Record<string, unknown> = {};
+      if (typeof body.name === 'string' && body.name.trim()) {
+        updates.name = body.name.trim();
+      }
+      if (typeof body.email === 'string' && body.email.trim()) {
+        updates.email = body.email.trim();
+      }
+      if (typeof body.company === 'string' && body.company.trim()) {
+        updates.company = body.company.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = new Date().toISOString();
+        const { error: updateErr } = await ctx.supabase
+          .from('contacts')
+          .update(updates)
+          .eq('id', id)
+          .eq('account_id', ctx.accountId);
+        if (updateErr) {
+          console.error('[api/v1/contacts] update existing contact error:', updateErr);
+        }
+      }
+    }
+
     if (Array.isArray(body.tags)) {
       await setContactTags(
         ctx.supabase,
