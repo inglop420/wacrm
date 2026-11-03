@@ -111,7 +111,7 @@ export function SpecializedAgentConfig({
     if (!accountId || loadedAccountIdRef.current === accountId) return;
     loadedAccountIdRef.current = accountId;
     void fetchAgent();
-    void fetchAccountMembers(accountId).then(setMembers).catch(() => setMembers([]));
+    void fetchAccountMembers().then(setMembers).catch(() => setMembers([]));
   }, [accountId, fetchAgent]);
 
   const save = async () => {

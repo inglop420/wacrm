@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { requireApiKey } from '@/lib/auth/api-context'
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond'
 import crypto from 'node:crypto'
@@ -20,7 +19,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
 
     if (!body || typeof body !== 'object') {
-      return fail('Invalid JSON body', 400)
+      return fail('bad_request', 'Invalid JSON body', 400)
     }
 
     const { phone, client_name, client_email, firm_name, plan, external_user_id, metadata, ttl_minutes } = body
@@ -34,7 +33,7 @@ export async function POST(request: Request) {
 
     const cleanPhone = typeof phone === 'string' ? phone.trim() : null
 
-    const { data: session, error: insError } = await ctx.db
+    const { data: session, error: insError } = await ctx.supabase
       .from('support_sessions')
       .insert({
         account_id: ctx.accountId,
@@ -53,11 +52,11 @@ export async function POST(request: Request) {
 
     if (insError) {
       console.error('[support-sessions POST] insert error:', insError)
-      return fail('Failed to create support session', 500)
+      return fail('internal', 'Failed to create support session', 500)
     }
 
     // Try to resolve business phone from whatsapp_config
-    const { data: waConfig } = await ctx.db
+    const { data: waConfig } = await ctx.supabase
       .from('whatsapp_config')
       .select('phone_number_id')
       .eq('account_id', ctx.accountId)
@@ -84,4 +83,3 @@ export async function POST(request: Request) {
     return toApiErrorResponse(err)
   }
 }
-
