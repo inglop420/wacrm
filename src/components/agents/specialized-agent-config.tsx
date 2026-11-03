@@ -321,7 +321,7 @@ export function SpecializedAgentConfig({
               </Label>
               <Select
                 value={handoffAgentId || HANDOFF_QUEUE}
-                onValueChange={(v) => setHandoffAgentId(v === HANDOFF_QUEUE ? '' : v)}
+                onValueChange={(v) => setHandoffAgentId(v && v !== HANDOFF_QUEUE ? v : '')}
                 disabled={!canEdit || saving}
               >
                 <SelectTrigger className="w-full">
