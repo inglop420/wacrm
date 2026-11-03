@@ -136,8 +136,10 @@ export async function dispatchInboundToAiReply(
     // below (this read can race a concurrent inbound).
     if (conv.ai_reply_count >= effectiveConfig.autoReplyMaxPerConversation) return
 
-    const sinceTimestamp = resolution.kind === 'support' ? conv.active_agent_since : null
-    const messages = await buildConversationContext(db, conversationId, undefined, sinceTimestamp)
+    let messages = await buildConversationContext(db, conversationId)
+    if (messages.length === 0 && inboundText) {
+      messages = [{ role: 'user', content: inboundText.trim() }]
+    }
     if (messages.length === 0) return
 
     // Account-wide throttle on the shared BYO key.

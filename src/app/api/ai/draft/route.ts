@@ -94,8 +94,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const sinceTimestamp = conversation.active_agent_id ? conversation.active_agent_since : null
-    const messages = await buildConversationContext(supabase, conversationId, undefined, sinceTimestamp)
+    const messages = await buildConversationContext(supabase, conversationId)
     if (messages.length === 0) {
       return NextResponse.json(
         {
