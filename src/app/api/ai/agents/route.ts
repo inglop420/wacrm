@@ -30,6 +30,10 @@ export async function GET() {
 
     // 2. Fetch specialized agents (e.g. Support)
     const customAgents = await listAgents(supabase, accountId)
+    if (!customAgents.some((a) => a.slug === 'support')) {
+      const defaultSupport = await loadAgentBySlug(supabase, accountId, 'support')
+      if (defaultSupport) customAgents.push(defaultSupport)
+    }
 
     const salesAgent = salesConfig
       ? {

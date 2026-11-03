@@ -179,3 +179,10 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 GRANT EXECUTE ON FUNCTION public.match_ai_knowledge_fts_scoped(uuid, uuid, text, integer) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.match_ai_knowledge_semantic_scoped(uuid, uuid, text, integer) TO authenticated, service_role;
 
+-- 7. Seed default Support Agent for existing accounts
+INSERT INTO ai_agents (account_id, slug, name, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation)
+SELECT id, 'support', 'Soporte Técnico', 'Eres el Agente de Soporte Técnico de LEGMA. Tu objetivo es asistir a socios y abogados postulantes en el uso diario de la plataforma: consulta de acuerdos judiciales, boletines, expedientes y fallas técnicas. Si un problema requiere escalamiento o el usuario solicita atención humana, responde exactamente [[HANDOFF]]. Mantén un tono formal, profesional, empático y resolutivo.', true, true, 4
+FROM accounts
+ON CONFLICT (account_id, slug) DO NOTHING;
+
+

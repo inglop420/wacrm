@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, ShieldCheck, Save, Users, Clock, Hash, Info } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,18 +58,16 @@ export function SpecializedAgentConfig({
   const [saving, setSaving] = useState(false);
   const [agent, setAgent] = useState<AgentData | null>(null);
 
-  // Form states
-  const [name, setName] = useState('Soporte Técnico & VIP');
+  // Form states matching AiConfig (Sales Agent mirror)
+  const [name, setName] = useState('Soporte Técnico');
   const [systemPrompt, setSystemPrompt] = useState(
-    'Eres el Agente de Soporte Técnico y Acompañamiento VIP de LEGMA. Tu objetivo es asistir a socios y abogados postulantes en el uso diario de la plataforma: consulta de acuerdos judiciales, boletines, expedientes, términos fatales y fallas técnicas. Si un problema requiere escalamiento o el usuario solicita atención humana, responde exactamente [[HANDOFF]]. Mantén un tono altamente empático, profesional, jurídico y resolutivo.',
+    'Eres el Agente de Soporte Técnico de LEGMA. Tu objetivo es asistir a socios y abogados postulantes en el uso diario de la plataforma: consulta de acuerdos judiciales, boletines, expedientes y fallas técnicas. Si un problema requiere escalamiento o el usuario solicita atención humana, responde exactamente [[HANDOFF]]. Mantén un tono formal, profesional, empático y resolutivo.',
   );
   const [model, setModel] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(true);
   const [maxPerConversation, setMaxPerConversation] = useState(4);
   const [handoffAgentId, setHandoffAgentId] = useState('');
-  const [triggerPhrasesStr, setTriggerPhrasesStr] = useState('requiero soporte, ref: sop-legma, asistencia, soporte técnico');
-  const [sessionTtlHours, setSessionTtlHours] = useState(24);
   const [members, setMembers] = useState<AccountMember[]>([]);
 
   const loadedAccountIdRef = useRef<string | null>(null);
@@ -90,15 +88,13 @@ export function SpecializedAgentConfig({
 
       if (found) {
         setAgent(found);
-        setName(found.name);
-        setSystemPrompt(found.systemPrompt ?? '');
+        setName(found.name || 'Soporte Técnico');
+        if (found.systemPrompt) setSystemPrompt(found.systemPrompt);
         setModel(found.model ?? '');
         setIsActive(found.isActive ?? true);
         setAutoReplyEnabled(found.autoReplyEnabled ?? true);
         setMaxPerConversation(found.autoReplyMaxPerConversation ?? 4);
         setHandoffAgentId(found.handoffAgentId ?? '');
-        setTriggerPhrasesStr((found.triggerPhrases ?? []).join(', '));
-        setSessionTtlHours(found.sessionTtlHours ?? 24);
       }
     } catch {
       toast.error('Error al consultar configuración del agente');
@@ -118,11 +114,6 @@ export function SpecializedAgentConfig({
     if (!canEdit) return;
     setSaving(true);
     try {
-      const phrases = triggerPhrasesStr
-        .split(',')
-        .map((p) => p.trim())
-        .filter(Boolean);
-
       const payload = {
         slug,
         name: name.trim() || 'Soporte Técnico',
@@ -132,8 +123,8 @@ export function SpecializedAgentConfig({
         auto_reply_enabled: autoReplyEnabled,
         auto_reply_max_per_conversation: maxPerConversation,
         handoff_agent_id: handoffAgentId || null,
-        trigger_phrases: phrases,
-        session_ttl_hours: sessionTtlHours,
+        trigger_phrases: [],
+        session_ttl_hours: 24,
       };
 
       const res = await fetch('/api/ai/agents', {
@@ -144,11 +135,11 @@ export function SpecializedAgentConfig({
 
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error ?? 'Error al guardar agente');
+        toast.error(data.error ?? 'Error al guardar configuración');
         return;
       }
 
-      toast.success('Agente de Soporte guardado correctamente');
+      toast.success('Configuración guardada correctamente');
       await fetchAgent();
     } catch {
       toast.error('Error de conexión al guardar');
@@ -165,167 +156,142 @@ export function SpecializedAgentConfig({
     );
   }
 
+  const disabled = !canEdit || saving;
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Agente de Soporte Técnico & VIP</CardTitle>
-                <CardDescription>
-                  Atiende exclusivamente los reportes e incidencias originados desde el botón de soporte de LEGMA.
-                </CardDescription>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="agent-active" className="text-xs text-muted-foreground">
-                  {isActive ? 'Activo' : 'Pausado'}
-                </Label>
-                <Switch
-                  id="agent-active"
-                  checked={isActive}
-                  onCheckedChange={setIsActive}
-                  disabled={!canEdit || saving}
-                />
-              </div>
-              {canEdit && (
-                <Button size="sm" onClick={save} disabled={saving} className="gap-1.5">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Guardar
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-5">
-          <div className="rounded-lg bg-muted/40 p-3.5 border flex items-start gap-2.5 text-xs text-muted-foreground">
-            <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold text-foreground">Credenciales compartidas:</span> Este agente utiliza
-              el mismo proveedor de IA (OpenAI / Anthropic / OpenRouter) y la clave API configurada en el Agente de
-              Ventas. No necesitas ingresar otra clave.
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-name">Nombre del Agente</Label>
+      <div className="space-y-6">
+        {/* Card 1: Proveedor y modelo (Espejo de Ventas) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Proveedor y clave</CardTitle>
+            <CardDescription>
+              Este agente utiliza la clave de API y el proveedor configurados en la cuenta. Puedes heredar el modelo principal o especificar uno para soporte.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="support-model">Modelo</Label>
               <Input
-                id="agent-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={!canEdit || saving}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-model">Modelo (Opcional)</Label>
-              <Input
-                id="agent-model"
-                placeholder="Heredar del Agente Principal"
+                id="support-model"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                disabled={!canEdit || saving}
+                placeholder="Heredar modelo del Agente de Ventas"
+                disabled={disabled}
+              />
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[11px] text-muted-foreground">Sugeridos:</span>
+                {[
+                  'meta-llama/llama-3.3-70b-instruct',
+                  'openai/gpt-4o-mini',
+                  'anthropic/claude-3.5-sonnet',
+                  'deepseek/deepseek-chat',
+                ].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => setModel(sug)}
+                    disabled={disabled}
+                    className="rounded border border-border bg-muted/50 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
+                    {sug.split('/')[1] || sug}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Comportamiento (Espejo exacto de Ventas) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Comportamiento</CardTitle>
+            <CardDescription>
+              Cuéntale al asistente sobre tu soporte: instrucciones, alcance y qué resolver. Este contexto alimenta tanto los borradores como las respuestas automáticas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="support-prompt">Contexto del negocio e instrucciones</Label>
+              <Textarea
+                id="support-prompt"
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="Instrucciones para el Agente de Soporte..."
+                rows={6}
+                disabled={disabled}
               />
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-prompt">Instrucciones y Persona (System Prompt)</Label>
-            <Textarea
-              id="agent-prompt"
-              rows={6}
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="Define el comportamiento, tono y cómo debe guiar al cliente..."
-              disabled={!canEdit || saving}
-              className="text-xs font-mono"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Para escalar con un operador humano, indícale al modelo emitir exactamente <code>[[HANDOFF]]</code>.
-            </p>
-          </div>
-
-          <div className="border-t pt-4 space-y-4">
-            <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-muted-foreground" /> Reglas de Auto-respuesta y Sesión
-            </h4>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="flex flex-col justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <Label className="text-xs font-medium">Responder automáticamente</Label>
-                  <p className="text-[11px] text-muted-foreground">
-                    El bot responde en cuanto llega un mensaje de soporte.
-                  </p>
-                </div>
-                <div className="pt-2">
-                  <Switch
-                    checked={autoReplyEnabled}
-                    onCheckedChange={setAutoReplyEnabled}
-                    disabled={!canEdit || saving}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-3 space-y-1.5">
-                <Label htmlFor="agent-max-replies" className="text-xs font-medium">
-                  Límite de respuestas por caso
-                </Label>
-                <Input
-                  id="agent-max-replies"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={maxPerConversation}
-                  onChange={(e) => setMaxPerConversation(Number(e.target.value))}
-                  disabled={!canEdit || saving}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Máximo de turnos que el bot intentará resolver antes de pasar a humano.
+            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Activar asistente de IA
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Interruptor general. Activa el bot de soporte técnico en la bandeja de entrada.
                 </p>
               </div>
-
-              <div className="rounded-lg border p-3 space-y-1.5">
-                <Label htmlFor="agent-ttl" className="text-xs font-medium">
-                  Duración de la sesión (Horas)
-                </Label>
-                <Input
-                  id="agent-ttl"
-                  type="number"
-                  min={1}
-                  max={168}
-                  value={sessionTtlHours}
-                  onChange={(e) => setSessionTtlHours(Number(e.target.value))}
-                  disabled={!canEdit || saving}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Tiempo que el chat permanece en modo soporte tras el último mensaje.
-                </p>
-              </div>
+              <Switch
+                checked={isActive}
+                onCheckedChange={setIsActive}
+                disabled={disabled}
+              />
             </div>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 border-t pt-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                Transferir a operador humano de soporte
-              </Label>
+            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Responder automáticamente a mensajes entrantes
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  El bot responde automáticamente cuando un cliente escribe desde el botón de soporte.
+                </p>
+              </div>
+              <Switch
+                checked={autoReplyEnabled}
+                onCheckedChange={setAutoReplyEnabled}
+                disabled={disabled || !isActive}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="support-max">Máximo de respuestas automáticas por conversación</Label>
+                <p className="text-xs text-muted-foreground">
+                  Después de esta cantidad de respuestas del bot en un mismo reporte, el bot guarda silencio.
+                </p>
+              </div>
+              <Input
+                id="support-max"
+                type="number"
+                min={1}
+                max={20}
+                value={maxPerConversation}
+                onChange={(e) =>
+                  setMaxPerConversation(
+                    Math.min(20, Math.max(1, Number(e.target.value) || 1)),
+                  )
+                }
+                disabled={disabled || !autoReplyEnabled}
+                className="w-20"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="support-handoff">Derivar a</Label>
+              <p className="text-xs text-muted-foreground">
+                Cuando el bot no puede ayudar, o alcanza el límite de respuestas, se pausa y dirige el chat aquí, con una breve nota de lo que pasó.
+              </p>
               <Select
                 value={handoffAgentId || HANDOFF_QUEUE}
-                onValueChange={(v) => setHandoffAgentId(v && v !== HANDOFF_QUEUE ? v : '')}
-                disabled={!canEdit || saving}
+                onValueChange={(v) =>
+                  setHandoffAgentId(v && v !== HANDOFF_QUEUE ? v : '')
+                }
+                disabled={disabled || !autoReplyEnabled}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccionar miembro del equipo" />
+                <SelectTrigger id="support-handoff">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={HANDOFF_QUEUE}>
@@ -338,40 +304,27 @@ export function SpecializedAgentConfig({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">
-                Cuando el bot hace handoff, el chat se reasigna a este especialista de soporte.
-              </p>
             </div>
+          </CardContent>
+        </Card>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="trigger-phrases" className="text-xs font-medium flex items-center gap-1.5">
-                <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-                Frases disparadoras adicionales
-              </Label>
-              <Input
-                id="trigger-phrases"
-                value={triggerPhrasesStr}
-                onChange={(e) => setTriggerPhrasesStr(e.target.value)}
-                placeholder="requiero soporte, ref: sop-legma"
-                disabled={!canEdit || saving}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Separadas por coma. Además de los códigos generados (ej. <code>SOP-XXXXX</code>).
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Card 3: Base de conocimiento exclusiva de Soporte */}
+        <AiKnowledgeCard
+          accountId={accountId}
+          canEdit={canEdit}
+          hasEmbeddingsKey={hasEmbeddingsKey}
+          agentId={agent?.id || 'support'}
+          agentName="Soporte Técnico"
+        />
 
-      {/* Scoped Knowledge Base */}
-      <AiKnowledgeCard
-        accountId={accountId}
-        canEdit={canEdit}
-        hasEmbeddingsKey={hasEmbeddingsKey}
-        agentId={agent?.id ?? null}
-        agentName="Soporte Técnico"
-      />
+        {/* Botón Guardar al fondo (igual que en Ventas) */}
+        <div className="flex items-center justify-end">
+          <Button onClick={save} disabled={disabled}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
-

@@ -71,6 +71,9 @@ function toAiAgent(row: any): AiAgent {
   }
 }
 
+export const DEFAULT_SUPPORT_PROMPT =
+  'Eres el Agente de Soporte Técnico de LEGMA. Tu objetivo es asistir a socios y abogados postulantes en el uso diario de la plataforma: consulta de acuerdos judiciales, boletines, expedientes y fallas técnicas. Si un problema requiere escalamiento o el usuario solicita atención humana, responde exactamente [[HANDOFF]]. Mantén un tono formal, profesional, empático y resolutivo.'
+
 /**
  * Loads an agent by slug for an account.
  */
@@ -86,8 +89,47 @@ export async function loadAgentBySlug(
       ? await (q2 as any).maybeSingle()
       : { data: null, error: null }
 
-    if (error || !data) return null
-    return toAiAgent(data)
+    if (!error && data) return toAiAgent(data)
+
+    // If Support agent row does not exist yet in DB, auto-provision or return default
+    if (slug === SUPPORT_AGENT_SLUG) {
+      try {
+        const { data: created } = await db
+          .from('ai_agents')
+          .insert({
+            account_id: accountId,
+            slug: SUPPORT_AGENT_SLUG,
+            name: 'Soporte Técnico',
+            system_prompt: DEFAULT_SUPPORT_PROMPT,
+            is_active: true,
+            auto_reply_enabled: true,
+            auto_reply_max_per_conversation: 4,
+          })
+          .select('*')
+          .maybeSingle()
+
+        if (created) return toAiAgent(created)
+      } catch {
+        // Fall back to virtual default representation
+      }
+
+      return {
+        id: 'support-default',
+        accountId,
+        slug: SUPPORT_AGENT_SLUG,
+        name: 'Soporte Técnico',
+        systemPrompt: DEFAULT_SUPPORT_PROMPT,
+        model: null,
+        isActive: true,
+        autoReplyEnabled: true,
+        autoReplyMaxPerConversation: 4,
+        handoffAgentId: null,
+        triggerPhrases: [],
+        sessionTtlHours: 24,
+      }
+    }
+
+    return null
   } catch {
     return null
   }
@@ -352,10 +394,15 @@ export async function resolveActiveAgent(args: {
         })
       }
 
+      const normalized = inboundText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const defaultSupportWords = ['soporte', 'asistencia', 'falla tecnica', 'ayuda tecnica', 'sop-']
+      const matchesDefaultWords = defaultSupportWords.some((w) => normalized.includes(w))
+
       const isExplicitSupportTrigger =
         claimedSession !== null ||
         (code !== null && code.startsWith('SOP-')) ||
-        phraseMatched
+        phraseMatched ||
+        matchesDefaultWords
 
       if (isExplicitSupportTrigger) {
         // Transition to Support!

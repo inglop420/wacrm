@@ -9,6 +9,55 @@ import { loadEmbeddingsKey } from '@/lib/ai/config'
 import { ingestDocument } from '@/lib/ai/knowledge'
 import { AiError } from '@/lib/ai/types'
 
+async function resolveAgentUuid(
+  supabase: any,
+  accountId: string,
+  raw: string | null,
+): Promise<{ uuid: string | null; isSales: boolean }> {
+  if (!raw || raw === 'sales' || raw === 'default') {
+    return { uuid: null, isSales: true }
+  }
+  if (raw === 'all') {
+    return { uuid: null, isSales: false }
+  }
+  // Check if it's already a valid UUID
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
+    return { uuid: raw, isSales: false }
+  }
+  // Resolve slug (e.g. 'support')
+  const { data } = await supabase
+    .from('ai_agents')
+    .select('id')
+    .eq('account_id', accountId)
+    .eq('slug', raw)
+    .maybeSingle()
+
+  if (data?.id) {
+    return { uuid: data.id, isSales: false }
+  }
+
+  // If looking for support and not yet in DB, auto-create it
+  if (raw === 'support') {
+    const { data: created } = await supabase
+      .from('ai_agents')
+      .insert({
+        account_id: accountId,
+        slug: 'support',
+        name: 'Soporte Técnico',
+        system_prompt: 'Eres el Agente de Soporte Técnico de LEGMA. Tu objetivo es asistir a socios y abogados postulantes en el uso diario de la plataforma: consulta de acuerdos judiciales, boletines, expedientes y fallas técnicas. Si un problema requiere escalamiento o el usuario solicita atención humana, responde exactamente [[HANDOFF]]. Mantén un tono formal, profesional, empático y resolutivo.',
+        is_active: true,
+        auto_reply_enabled: true,
+        auto_reply_max_per_conversation: 4,
+      })
+      .select('id')
+      .maybeSingle()
+
+    return { uuid: created?.id ?? null, isSales: false }
+  }
+
+  return { uuid: null, isSales: false }
+}
+
 /**
  * GET /api/ai/knowledge
  *
@@ -26,10 +75,17 @@ export async function GET(request: Request) {
       .select('id, title, updated_at, agent_id')
       .eq('account_id', accountId)
 
-    if (rawAgentId && rawAgentId !== 'sales' && rawAgentId !== 'all') {
-      query = query.eq('agent_id', rawAgentId)
-    } else if (rawAgentId === 'sales') {
+    const resolved = await resolveAgentUuid(supabase, accountId, rawAgentId)
+
+    if (resolved.isSales) {
+      // Sales agent documents (agent_id IS NULL)
       query = query.is('agent_id', null)
+    } else if (resolved.uuid) {
+      // Specialized agent documents (e.g. Support)
+      query = query.eq('agent_id', resolved.uuid)
+    } else if (rawAgentId === 'support') {
+      // Support requested but has no documents yet -> return empty!
+      return NextResponse.json({ documents: [] })
     }
 
     const { data, error } = await query.order('updated_at', { ascending: false })
@@ -70,7 +126,8 @@ export async function POST(request: Request) {
     }
 
     const rawAgentId = typeof body?.agent_id === 'string' ? body.agent_id.trim() : null
-    const agentId = rawAgentId && rawAgentId !== 'sales' ? rawAgentId : null
+    const resolved = await resolveAgentUuid(supabase, accountId, rawAgentId)
+    const agentId = resolved.isSales ? null : resolved.uuid
 
     const { data: doc, error } = await supabase
       .from('ai_knowledge_documents')

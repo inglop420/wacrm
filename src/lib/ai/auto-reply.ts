@@ -7,7 +7,7 @@ import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
-import { resolveActiveAgent } from './agents'
+import { resolveActiveAgent, DEFAULT_SUPPORT_PROMPT } from './agents'
 import type { AiConfig } from './types'
 import {
   engineSendText,
@@ -112,7 +112,7 @@ export async function dispatchInboundToAiReply(
       effectiveConfig = {
         ...config,
         model: supportAgent.model?.trim() || config.model,
-        systemPrompt: supportAgent.systemPrompt,
+        systemPrompt: supportAgent.systemPrompt?.trim() || DEFAULT_SUPPORT_PROMPT,
         isActive: supportAgent.isActive,
         autoReplyEnabled: supportAgent.autoReplyEnabled,
         autoReplyMaxPerConversation: supportAgent.autoReplyMaxPerConversation,

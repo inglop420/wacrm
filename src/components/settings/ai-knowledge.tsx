@@ -178,7 +178,9 @@ export function AiKnowledgeCard({
 
   const description = agentName
     ? `Documentos de referencia y respuestas frecuentes exclusivos para ${agentName}.`
-    : t('cardDescription');
+    : t('description', {
+        searchType: hasEmbeddingsKey ? t('semanticSearchOn') : t('keywordSearchOn'),
+      });
 
   return (
     <Card className="mt-6">
@@ -187,7 +189,7 @@ export function AiKnowledgeCard({
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
               <BookOpen className="h-5 w-5 text-primary" />
-              {t('cardTitle')} {agentName ? `(${agentName})` : ''}
+              {t('title')} {agentName ? `(${agentName})` : ''}
             </CardTitle>
             <CardDescription className="mt-1">
               {description}
@@ -209,7 +211,7 @@ export function AiKnowledgeCard({
                   ) : (
                     <RefreshCw className="h-3.5 w-3.5" />
                   )}
-                  {t('reindexButton')}
+                  {t('reindex')}
                 </Button>
               )}
               <Button
@@ -219,7 +221,7 @@ export function AiKnowledgeCard({
                 disabled={editing !== null}
                 className="gap-1.5"
               >
-                <Plus className="h-3.5 w-3.5" /> {t('addDocumentButton')}
+                <Plus className="h-3.5 w-3.5" /> {t('addDoc')}
               </Button>
             </div>
           )}
@@ -230,13 +232,13 @@ export function AiKnowledgeCard({
         {editing !== null && (
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
             <h4 className="text-sm font-semibold text-foreground">
-              {editing === 'new' ? t('editorTitleNew') : t('editorTitleEdit')}
+              {editing === 'new' ? t('addDoc') : t('editDoc')}
             </h4>
             <div className="space-y-1.5">
-              <Label htmlFor="kb-title">{t('editorTitleLabel')}</Label>
+              <Label htmlFor="kb-title">{t('editDocTitle')}</Label>
               <Input
                 id="kb-title"
-                placeholder={t('editorTitlePlaceholder')}
+                placeholder={t('editDocTitlePlaceholder')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={200}
@@ -244,11 +246,11 @@ export function AiKnowledgeCard({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="kb-content">{t('editorContentLabel')}</Label>
+              <Label htmlFor="kb-content">{t('editDocContent')}</Label>
               <Textarea
                 id="kb-content"
                 rows={8}
-                placeholder={t('editorContentPlaceholder')}
+                placeholder={t('editDocContentPlaceholder')}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 disabled={saving}
@@ -263,7 +265,7 @@ export function AiKnowledgeCard({
                 onClick={cancelEdit}
                 disabled={saving}
               >
-                {t('cancelButton')}
+                {t('cancel')}
               </Button>
               <Button
                 type="button"
@@ -273,7 +275,7 @@ export function AiKnowledgeCard({
                 className="gap-1.5"
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {t('saveButton')}
+                {t('saveDoc')}
               </Button>
             </div>
           </div>
@@ -285,7 +287,7 @@ export function AiKnowledgeCard({
           </div>
         ) : docs.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            {t('empty')}
+            {agentName ? `Aún no hay documentos para ${agentName}.` : t('noDocs')}
           </p>
         ) : (
           <div className="divide-y rounded-md border">
@@ -299,8 +301,7 @@ export function AiKnowledgeCard({
                     {doc.title}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {t('updated')}{' '}
-                    {new Date(doc.updated_at).toLocaleDateString()}
+                    Actualizado: {new Date(doc.updated_at).toLocaleDateString()}
                   </p>
                 </div>
                 {canEdit && (
@@ -312,7 +313,7 @@ export function AiKnowledgeCard({
                       className="h-8 w-8"
                       onClick={() => openEdit(doc.id)}
                       disabled={editing !== null}
-                      aria-label={t('editButtonAria')}
+                      aria-label={t('editDoc')}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -323,7 +324,7 @@ export function AiKnowledgeCard({
                       className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => remove(doc.id)}
                       disabled={editing !== null}
-                      aria-label={t('deleteButtonAria')}
+                      aria-label={t('deleteDoc')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

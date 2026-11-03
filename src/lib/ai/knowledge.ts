@@ -135,14 +135,6 @@ export async function retrieveKnowledge(
             }
 
         let res = await db.rpc(rpcName, rpcArgs)
-        if (agentId && res?.error) {
-          // Fallback to unscoped if migration hasn't landed
-          res = await db.rpc('match_ai_knowledge_semantic', {
-            p_account_id: accountId,
-            p_query_embedding: toVectorLiteral(queryEmbedding),
-            p_match_count: k,
-          })
-        }
 
         if (!res?.error && Array.isArray(res?.data)) {
           for (const row of res.data as MatchRow[]) picked.set(row.id, row.content)
@@ -171,13 +163,6 @@ export async function retrieveKnowledge(
           }
 
       let res = await db.rpc(rpcName, rpcArgs)
-      if (agentId && res?.error) {
-        res = await db.rpc('match_ai_knowledge_fts', {
-          p_account_id: accountId,
-          p_query: query,
-          p_match_count: k,
-        })
-      }
 
       if (!res?.error && Array.isArray(res?.data)) {
         for (const row of res.data as MatchRow[]) {
