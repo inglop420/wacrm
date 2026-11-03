@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
-import { listAgents } from '@/lib/ai/agents'
+import { listAgents, loadAgentBySlug } from '@/lib/ai/agents'
 
 function bad(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
