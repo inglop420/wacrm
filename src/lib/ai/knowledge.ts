@@ -30,6 +30,7 @@ export async function ingestDocument(
   config: Pick<AiConfig, 'embeddingsApiKey'>,
   documentId: string,
   content: string,
+  agentId?: string | null,
 ): Promise<void> {
   const chunks = chunkText(content)
 
@@ -64,6 +65,7 @@ export async function ingestDocument(
     chunk_index: i,
     content,
     embedding: embeddings ? toVectorLiteral(embeddings[i]) : null,
+    agent_id: agentId ?? null,
   }))
 
   const { error: insErr } = await db.from('ai_knowledge_chunks').insert(rows)
@@ -87,6 +89,7 @@ export async function retrieveKnowledge(
   config: Pick<AiConfig, 'embeddingsApiKey'>,
   queryText: string,
   k = 5,
+  agentId?: string | null,
 ): Promise<string[]> {
   const query = queryText.trim()
   if (!query || k <= 0) return []
@@ -96,10 +99,15 @@ export async function retrieveKnowledge(
   // just to get []. One cheap indexed COUNT (head, no rows) instead of a
   // paid embeddings call on the hot path.
   try {
-    const { count, error } = await db
+    const queryBuilder = db
       .from('ai_knowledge_chunks')
       .select('id', { count: 'exact', head: true })
       .eq('account_id', accountId)
+
+    const { count, error } = agentId && typeof (queryBuilder as any).eq === 'function'
+      ? await (queryBuilder as any).eq('agent_id', agentId)
+      : await queryBuilder
+
     if (error || !count) return []
   } catch {
     return []
@@ -112,13 +120,32 @@ export async function retrieveKnowledge(
     try {
       const [queryEmbedding] = await embedTexts(config.embeddingsApiKey, [query])
       if (queryEmbedding) {
-        const { data, error } = await db.rpc('match_ai_knowledge_semantic', {
-          p_account_id: accountId,
-          p_query_embedding: toVectorLiteral(queryEmbedding),
-          p_match_count: k,
-        })
-        if (!error && Array.isArray(data)) {
-          for (const row of data as MatchRow[]) picked.set(row.id, row.content)
+        const rpcName = agentId ? 'match_ai_knowledge_semantic_scoped' : 'match_ai_knowledge_semantic'
+        const rpcArgs = agentId
+          ? {
+              p_account_id: accountId,
+              p_agent_id: agentId,
+              p_query_embedding: toVectorLiteral(queryEmbedding),
+              p_match_count: k,
+            }
+          : {
+              p_account_id: accountId,
+              p_query_embedding: toVectorLiteral(queryEmbedding),
+              p_match_count: k,
+            }
+
+        let res = await db.rpc(rpcName, rpcArgs)
+        if (agentId && res?.error) {
+          // Fallback to unscoped if migration hasn't landed
+          res = await db.rpc('match_ai_knowledge_semantic', {
+            p_account_id: accountId,
+            p_query_embedding: toVectorLiteral(queryEmbedding),
+            p_match_count: k,
+          })
+        }
+
+        if (!res?.error && Array.isArray(res?.data)) {
+          for (const row of res.data as MatchRow[]) picked.set(row.id, row.content)
         }
       }
     } catch (err) {
@@ -129,13 +156,31 @@ export async function retrieveKnowledge(
   // Lexical top-up (also the sole path when there's no embeddings key).
   if (picked.size < k) {
     try {
-      const { data, error } = await db.rpc('match_ai_knowledge_fts', {
-        p_account_id: accountId,
-        p_query: query,
-        p_match_count: k,
-      })
-      if (!error && Array.isArray(data)) {
-        for (const row of data as MatchRow[]) {
+      const rpcName = agentId ? 'match_ai_knowledge_fts_scoped' : 'match_ai_knowledge_fts'
+      const rpcArgs = agentId
+        ? {
+            p_account_id: accountId,
+            p_agent_id: agentId,
+            p_query: query,
+            p_match_count: k,
+          }
+        : {
+            p_account_id: accountId,
+            p_query: query,
+            p_match_count: k,
+          }
+
+      let res = await db.rpc(rpcName, rpcArgs)
+      if (agentId && res?.error) {
+        res = await db.rpc('match_ai_knowledge_fts', {
+          p_account_id: accountId,
+          p_query: query,
+          p_match_count: k,
+        })
+      }
+
+      if (!res?.error && Array.isArray(res?.data)) {
+        for (const row of res.data as MatchRow[]) {
           if (picked.size >= k) break
           if (!picked.has(row.id)) picked.set(row.id, row.content)
         }

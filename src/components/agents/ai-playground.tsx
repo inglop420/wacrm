@@ -14,12 +14,26 @@ interface Turn {
   handoff?: boolean;
 }
 
-export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
+export function AiPlayground({
+  onGoToSetup,
+  agentId,
+  agentName,
+}: {
+  onGoToSetup?: () => void;
+  agentId?: string | null;
+  agentName?: string;
+}) {
   const t = useTranslations('Agents.playground');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Reset conversation transcript when switching agents
+    setTurns([]);
+    setInput('');
+  }, [agentId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -37,9 +51,9 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
       const res = await fetch('/api/ai/playground', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Send only role+content — the server ignores anything else.
         body: JSON.stringify({
           messages: next.map((t) => ({ role: t.role, content: t.content })),
+          agent_id: agentId ?? null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -49,7 +63,6 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         } else {
           toast.error(data.error ?? t('noReply'));
         }
-        // Roll the unsent user turn back so the transcript stays clean.
         setTurns(turns);
         setInput(text);
         return;
@@ -74,125 +87,166 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void send();
     }
   };
 
+  const reset = () => {
+    setTurns([]);
+    setInput('');
+  };
+
   return (
-    <div className="flex h-[60vh] min-h-[420px] flex-col rounded-xl border border-border bg-card">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className="flex flex-col h-[600px] rounded-lg border bg-background shadow-sm">
+      <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-foreground">{t('title')}</span>
-          <span className="text-xs text-muted-foreground">
-            {t('subtitle')}
+          <Bot className="h-5 w-5 text-primary" />
+          <span className="font-semibold text-foreground">
+            {t('chatTitle')} {agentName ? `(${agentName})` : ''}
+          </span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {t('simulatedBadge')}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setTurns([])}
-          disabled={turns.length === 0 || sending}
-          className="text-muted-foreground"
-        >
-          <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> {t('reset')}
-        </Button>
+        {turns.length > 0 && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={reset}
+            disabled={sending}
+            className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> {t('resetButton')}
+          </Button>
+        )}
       </div>
 
-      {/* Transcript */}
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
-        {turns.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
-            <Bot className="mb-2 h-8 w-8 text-muted-foreground/60" />
-            <p>{t('emptyTitle')}</p>
-            <p className="mt-1 text-xs">
-              {t('emptyDesc')}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 text-sm"
+      >
+        {turns.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground p-6">
+            <Bot className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <p className="font-medium text-foreground">{t('emptyTitle')}</p>
+            <p className="mt-1 text-xs max-w-sm">
+              {agentName
+                ? `Escribe una pregunta para probar cómo responderá ${agentName}.`
+                : t('emptyDescription')}
             </p>
             {onGoToSetup && (
               <Button
-                variant="link"
+                type="button"
+                variant="outline"
                 size="sm"
                 onClick={onGoToSetup}
-                className="mt-1 h-auto p-0 text-xs"
+                className="mt-4 gap-1.5 text-xs"
               >
-                {t('goToSetup')} <ArrowRight className="ml-1 h-3 w-3" />
+                {t('configureButton')} <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>
-        )}
-
-        {turns.map((turn, i) => (
-          <div
-            key={i}
-            className={cn(
-              'flex gap-2',
-              turn.role === 'user' ? 'justify-end' : 'justify-start',
-            )}
-          >
-            {turn.role === 'assistant' && (
-              <Bot className="mt-1 h-5 w-5 shrink-0 text-primary" />
-            )}
+        ) : (
+          turns.map((turn, i) => (
             <div
+              key={i}
               className={cn(
-                'max-w-[80%] rounded-2xl px-3.5 py-2 text-sm',
-                turn.role === 'user'
-                  ? 'rounded-br-sm bg-primary text-primary-foreground'
-                  : 'rounded-bl-sm bg-muted text-foreground',
+                'flex gap-2.5 max-w-[85%]',
+                turn.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto',
               )}
             >
-              {turn.content && <p className="whitespace-pre-wrap">{turn.content}</p>}
-              {turn.role === 'assistant' && turn.handoff && (
-                <p
+              <div
+                className={cn(
+                  'flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold',
+                  turn.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground',
+                )}
+              >
+                {turn.role === 'user' ? (
+                  <UserCircle2 className="h-4 w-4" />
+                ) : (
+                  <Bot className="h-4 w-4" />
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <div
                   className={cn(
-                    'flex items-center gap-1 text-xs text-amber-500',
-                    turn.content && 'mt-1.5 border-t border-border/50 pt-1.5',
+                    'rounded-lg px-3.5 py-2 whitespace-pre-wrap leading-relaxed',
+                    turn.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-foreground',
                   )}
                 >
-                  <UserCircle2 className="h-3.5 w-3.5" />
-                  {t('handoff')}
-                </p>
-              )}
+                  {turn.content || (
+                    <span className="italic text-muted-foreground">
+                      {t('noTextReply')}
+                    </span>
+                  )}
+                </div>
+
+                {turn.handoff && (
+                  <div className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium px-1">
+                    <span>{t('handoffSignalled')}</span>
+                  </div>
+                )}
+              </div>
             </div>
-            {turn.role === 'user' && (
-              <UserCircle2 className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-            )}
-          </div>
-        ))}
+          ))
+        )}
 
         {sending && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Bot className="h-5 w-5 text-primary" />
-            <Loader2 className="h-4 w-4 animate-spin" /> {t('thinking')}
+          <div className="flex gap-2.5 max-w-[85%] mr-auto">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Bot className="h-4 w-4" />
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg bg-muted px-3.5 py-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>{t('typing')}</span>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Composer */}
-      <div className="flex items-end gap-2 border-t border-border p-3">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t('placeholder')}
-          rows={1}
-          className="flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
-        />
-        <Button
-          size="sm"
-          onClick={send}
-          disabled={!input.trim() || sending}
-          className="h-9 w-9 shrink-0 p-0"
+      <div className="border-t p-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send();
+          }}
+          className="flex items-center gap-2"
         >
-          {sending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('inputPlaceholder')}
+            disabled={sending}
+            className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            autoFocus
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!input.trim() || sending}
+            className="h-8 gap-1.5 px-3"
+          >
+            {sending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
+            <span className="sr-only sm:not-sr-only sm:inline-block text-xs">
+              {t('sendButton')}
+            </span>
+          </Button>
+        </form>
       </div>
     </div>
   );

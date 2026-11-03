@@ -13,15 +13,27 @@ import { AiError } from '@/lib/ai/types'
  * GET /api/ai/knowledge
  *
  * List the account's knowledge-base documents (any member).
+ * Supports optional `?agent_id=` query param to filter by agent.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { supabase, accountId } = await getCurrentAccount()
-    const { data, error } = await supabase
+    const url = new URL(request.url)
+    const rawAgentId = url.searchParams.get('agent_id')
+
+    let query = supabase
       .from('ai_knowledge_documents')
-      .select('id, title, updated_at')
+      .select('id, title, updated_at, agent_id')
       .eq('account_id', accountId)
-      .order('updated_at', { ascending: false })
+
+    if (rawAgentId && rawAgentId !== 'sales' && rawAgentId !== 'all') {
+      query = query.eq('agent_id', rawAgentId)
+    } else if (rawAgentId === 'sales') {
+      query = query.is('agent_id', null)
+    }
+
+    const { data, error } = await query.order('updated_at', { ascending: false })
+
     if (error) {
       console.error('[ai/knowledge GET] error:', error)
       return NextResponse.json(
@@ -57,11 +69,21 @@ export async function POST(request: Request) {
       )
     }
 
+    const rawAgentId = typeof body?.agent_id === 'string' ? body.agent_id.trim() : null
+    const agentId = rawAgentId && rawAgentId !== 'sales' ? rawAgentId : null
+
     const { data: doc, error } = await supabase
       .from('ai_knowledge_documents')
-      .insert({ account_id: accountId, created_by: userId, title, content })
+      .insert({
+        account_id: accountId,
+        created_by: userId,
+        title,
+        content,
+        agent_id: agentId,
+      })
       .select('id')
       .single()
+
     if (error || !doc) {
       console.error('[ai/knowledge POST] insert error:', error)
       return NextResponse.json(
@@ -81,6 +103,7 @@ export async function POST(request: Request) {
         { embeddingsApiKey },
         doc.id,
         content,
+        agentId,
       )
     } catch (err) {
       const message = err instanceof AiError ? err.message : 'indexing failed'

@@ -20,6 +20,7 @@ const MAX_TURNS = 20
  * here is what a real customer would get. Reads the config even when the
  * master switch is off (requireActive:false) so you can try it before
  * going live. Stateless: the client sends the running transcript each turn.
+ * Supports optional `agent_id` in the body to test a specific agent (e.g. Support).
  */
 export async function POST(request: Request) {
   try {
@@ -72,19 +73,43 @@ export async function POST(request: Request) {
       )
     }
 
+    const rawAgentId = typeof body?.agent_id === 'string' ? body.agent_id.trim() : null
+    let effectiveConfig = config
+    let agentId: string | null = null
+
+    if (rawAgentId && rawAgentId !== 'sales') {
+      const { data: agent } = await supabase
+        .from('ai_agents')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('id', rawAgentId)
+        .maybeSingle()
+
+      if (agent) {
+        agentId = agent.id
+        effectiveConfig = {
+          ...config,
+          model: agent.model?.trim() || config.model,
+          systemPrompt: agent.system_prompt,
+        }
+      }
+    }
+
     const knowledge = await retrieveKnowledge(
       supabase,
       accountId,
-      config,
+      effectiveConfig,
       latestUserMessage(messages),
+      5,
+      agentId,
     )
     const systemPrompt = buildSystemPrompt({
-      userPrompt: config.systemPrompt,
+      userPrompt: effectiveConfig.systemPrompt,
       mode: 'auto_reply',
       knowledge,
     })
 
-    const { text, handoff } = await generateReply({ config, systemPrompt, messages })
+    const { text, handoff } = await generateReply({ config: effectiveConfig, systemPrompt, messages })
     return NextResponse.json({ reply: text, handoff })
   } catch (err) {
     if (err instanceof AiError) {

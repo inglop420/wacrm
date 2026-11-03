@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, Sparkles, Settings2, BarChart3 } from 'lucide-react';
+import { Bot, Sparkles, Settings2, BarChart3, Briefcase, ShieldCheck } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AiPlayground } from '@/components/agents/ai-playground';
 import { AiUsageCard } from '@/components/agents/ai-usage';
 import { AiConfig } from '@/components/settings/ai-config';
+import { SpecializedAgentConfig } from '@/components/agents/specialized-agent-config';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
+import { cn } from '@/lib/utils';
 
 type Tab = 'playground' | 'setup' | 'usage';
 
@@ -18,15 +20,34 @@ export default function AgentsPage() {
   const canViewUsage = accountRole ? canEditSettings(accountRole) : false;
   const [tab, setTab] = useState<Tab>('playground');
   const [decided, setDecided] = useState(false);
+  const [selectedAgentSlug, setSelectedAgentSlug] = useState<'sales' | 'support'>('sales');
+  const [supportAgentId, setSupportAgentId] = useState<string | null>(null);
+  const [hasEmbeddingsKey, setHasEmbeddingsKey] = useState(false);
 
   // Land first-time users on Setup, returning users on the Playground.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/ai/config');
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled) setTab(data?.configured ? 'playground' : 'setup');
+        const [configRes, agentsRes] = await Promise.all([
+          fetch('/api/ai/config'),
+          fetch('/api/ai/agents'),
+        ]);
+
+        const configData = await configRes.json().catch(() => ({}));
+        const agentsData = await agentsRes.json().catch(() => ({}));
+
+        if (!cancelled) {
+          setHasEmbeddingsKey(Boolean(configData?.has_embeddings_key));
+          setTab(configData?.configured ? 'playground' : 'setup');
+
+          const support = (agentsData?.customAgents ?? []).find(
+            (a: { slug: string }) => a.slug === 'support',
+          );
+          if (support) {
+            setSupportAgentId(support.id);
+          }
+        }
       } catch {
         if (!cancelled) setTab('setup');
       } finally {
@@ -50,6 +71,37 @@ export default function AgentsPage() {
         {t('description')}
       </p>
 
+      {/* Multi-Agent Selector Pills */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSelectedAgentSlug('sales')}
+          className={cn(
+            'flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer',
+            selectedAgentSlug === 'sales'
+              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground',
+          )}
+        >
+          <Briefcase className="h-3.5 w-3.5" />
+          <span>Agente de Ventas (Principal)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedAgentSlug('support')}
+          className={cn(
+            'flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer',
+            selectedAgentSlug === 'support'
+              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground',
+          )}
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          <span>Agente de Soporte Técnico</span>
+        </button>
+      </div>
+
       {decided && (
         <Tabs
           value={tab}
@@ -71,11 +123,22 @@ export default function AgentsPage() {
           </TabsList>
 
           <TabsContent value="playground" className="mt-4">
-            <AiPlayground onGoToSetup={() => setTab('setup')} />
+            <AiPlayground
+              onGoToSetup={() => setTab('setup')}
+              agentId={selectedAgentSlug === 'support' ? supportAgentId : null}
+              agentName={selectedAgentSlug === 'support' ? 'Soporte Técnico' : 'Ventas'}
+            />
           </TabsContent>
 
           <TabsContent value="setup" className="mt-4">
-            <AiConfig />
+            {selectedAgentSlug === 'sales' ? (
+              <AiConfig />
+            ) : (
+              <SpecializedAgentConfig
+                slug="support"
+                hasEmbeddingsKey={hasEmbeddingsKey}
+              />
+            )}
           </TabsContent>
 
           {canViewUsage && (

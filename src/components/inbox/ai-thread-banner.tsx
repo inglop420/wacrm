@@ -76,6 +76,7 @@ export function AiThreadBanner({
   handoffSummary,
   assignedAgentId,
   currentUserId,
+  activeAgentId,
   onChange,
 }: AiThreadBannerProps) {
   const t = useTranslations("Inbox.aiBanner");
@@ -167,6 +168,15 @@ export function AiThreadBanner({
         <span className="truncate font-medium text-foreground">
           {t("activeText")}
         </span>
+        {activeAgentId ? (
+          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+            🛡️ Soporte
+          </span>
+        ) : (
+          <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+            💼 Ventas
+          </span>
+        )}
       </div>
       <BannerButton onClick={() => toggle(true)} busy={busy} icon={Hand}>
         {t("takeOver")}

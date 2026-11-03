@@ -11,6 +11,7 @@ export interface LogAiUsageArgs {
   model: string
   /** Provider usage; a no-op when null (nothing worth recording). */
   usage: AiUsage | null
+  agentId?: string | null
 }
 
 /**
@@ -32,7 +33,7 @@ export async function logAiUsage(
 ): Promise<void> {
   if (!args.usage) return
   try {
-    const { error } = await db.from('ai_usage_log').insert({
+    const payload: Record<string, unknown> = {
       account_id: args.accountId,
       conversation_id: args.conversationId,
       mode: args.mode,
@@ -41,7 +42,12 @@ export async function logAiUsage(
       prompt_tokens: args.usage.promptTokens,
       completion_tokens: args.usage.completionTokens,
       total_tokens: args.usage.totalTokens,
-    })
+    }
+    if (args.agentId !== undefined) {
+      payload.agent_id = args.agentId
+    }
+
+    const { error } = await db.from('ai_usage_log').insert(payload)
     if (error) {
       console.error('[ai usage] log insert failed:', error)
     }

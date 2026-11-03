@@ -20,7 +20,7 @@ export async function GET(_request: Request, { params }: Params) {
     const { id } = await params
     const { data, error } = await supabase
       .from('ai_knowledge_documents')
-      .select('id, title, content, updated_at')
+      .select('id, title, content, updated_at, agent_id')
       .eq('account_id', accountId)
       .eq('id', id)
       .maybeSingle()
@@ -68,7 +68,7 @@ export async function PATCH(request: Request, { params }: Params) {
       .update(update)
       .eq('account_id', accountId)
       .eq('id', id)
-      .select('id')
+      .select('id, agent_id')
       .maybeSingle()
     if (error) {
       console.error('[ai/knowledge/[id] PATCH] error:', error)
@@ -82,7 +82,7 @@ export async function PATCH(request: Request, { params }: Params) {
         accountId,
       )
       try {
-        await ingestDocument(supabase, accountId, { embeddingsApiKey }, id, content)
+        await ingestDocument(supabase, accountId, { embeddingsApiKey }, id, content, updated.agent_id)
       } catch (err) {
         const message = err instanceof AiError ? err.message : 'indexing failed'
         console.error('[ai/knowledge/[id] PATCH] ingest error:', err)

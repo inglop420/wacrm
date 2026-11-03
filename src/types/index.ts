@@ -192,6 +192,9 @@ export interface Conversation {
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
   ai_handoff_summary?: string | null;
+  active_agent_id?: string | null;
+  active_agent_since?: string | null;
+  entry_point?: string | null;
 }
 
 // ============================================================

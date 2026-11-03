@@ -7,6 +7,8 @@ import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
+import { resolveActiveAgent } from './agents'
+import type { AiConfig } from './types'
 import {
   engineSendText,
   loadAccountMetaCredentials,
@@ -26,6 +28,10 @@ interface DispatchArgs {
    *  a typing indicator (which also marks it read) is shown while the
    *  reply is generated. Optional so older callers keep working. */
   inboundMessageId?: string
+  /** Inbound customer text, used for agent intent / trigger code resolution. */
+  inboundText?: string
+  /** Customer phone number, used for support session resolution. */
+  contactPhone?: string | null
 }
 
 /**
@@ -36,16 +42,12 @@ interface DispatchArgs {
  * runner's contract: it owns its try/catch and NEVER throws — a failing
  * or slow LLM call must not affect the webhook's 200 to Meta.
  *
- * Eligibility gates (any → silent no-op):
- *   - AI off / auto-reply disabled for the account
- *   - a human agent is assigned (they own the thread)
- *   - auto-reply was disabled for this conversation (prior handoff)
- *   - the per-conversation reply cap is reached
- *   - there's nothing to reply to
- *
- * The 24h WhatsApp session window is inherently open here — we're
- * reacting to a customer message that just landed — so no separate
- * window check is needed.
+ * Multi-Agent routing:
+ *   - Resolves whether inbound is for Support (trigger code / button session / phrase)
+ *     or Sales (default).
+ *   - If contact has 'Cliente' tag and is NOT in a support session, the bots remain
+ *     dormant (never send existing clients to sales).
+ *   - Applies the active agent's system prompt, knowledge base, reply caps, and handoff.
  */
 export async function dispatchInboundToAiReply(
   args: DispatchArgs,
@@ -56,13 +58,16 @@ export async function dispatchInboundToAiReply(
     contactId,
     configOwnerUserId,
     inboundMessageId,
+    inboundText,
+    contactPhone,
   } = args
 
   try {
     const db = supabaseAdmin()
 
+    // Base account AI config: provides shared API credentials (BYO key, provider, embeddings)
     const config = await loadAiConfig(db, accountId)
-    if (!config || !config.autoReplyEnabled) return
+    if (!config || !config.isActive) return
 
     // Deterministic, user-configured responders win over the LLM — the
     // caller already excludes messages a Flow consumed. Message-level
@@ -81,9 +86,47 @@ export async function dispatchInboundToAiReply(
       .limit(1)
     if (autoResponders && autoResponders.length > 0) return
 
+    // Resolve active agent (Support vs Sales vs Dormant)
+    const resolution = await resolveActiveAgent({
+      db,
+      accountId,
+      conversationId,
+      contactId,
+      inboundText: inboundText ?? '',
+      contactPhone,
+    })
+
+    if (resolution.kind === 'client_dormant') {
+      // Existing client messaging outside support button session -> no bot replies!
+      return
+    }
+
+    let effectiveConfig: AiConfig
+    let agentId: string | null = null
+
+    if (resolution.kind === 'support') {
+      const supportAgent = resolution.agent
+      if (!supportAgent.isActive || !supportAgent.autoReplyEnabled) return
+
+      agentId = supportAgent.id
+      effectiveConfig = {
+        ...config,
+        model: supportAgent.model?.trim() || config.model,
+        systemPrompt: supportAgent.systemPrompt,
+        isActive: supportAgent.isActive,
+        autoReplyEnabled: supportAgent.autoReplyEnabled,
+        autoReplyMaxPerConversation: supportAgent.autoReplyMaxPerConversation,
+        handoffAgentId: supportAgent.handoffAgentId,
+      }
+    } else {
+      // Sales agent (existing configuration in ai_configs)
+      if (!config.autoReplyEnabled) return
+      effectiveConfig = config
+    }
+
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, active_agent_since')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
@@ -91,16 +134,13 @@ export async function dispatchInboundToAiReply(
     if (conv.ai_autoreply_disabled) return // handed off / turned off here
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
-    if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
+    if (conv.ai_reply_count >= effectiveConfig.autoReplyMaxPerConversation) return
 
-    const messages = await buildConversationContext(db, conversationId)
+    const sinceTimestamp = resolution.kind === 'support' ? conv.active_agent_since : null
+    const messages = await buildConversationContext(db, conversationId, undefined, sinceTimestamp)
     if (messages.length === 0) return
 
-    // Account-wide throttle on the shared BYO key. The per-conversation
-    // cap bounds one thread; this bounds a burst across many threads (a
-    // marketing blast landing 200 replies at once) so we never run the
-    // owner's key past the provider's rate limit. Over the limit → skip
-    // the auto-reply; the inbound still sits in the inbox for a human.
+    // Account-wide throttle on the shared BYO key.
     const acctLimit = checkRateLimit(
       `ai-autoreply:${accountId}`,
       RATE_LIMITS.aiAutoReplyAccount,
@@ -114,56 +154,47 @@ export async function dispatchInboundToAiReply(
 
     // Every gate has passed — we're committed to attempting a reply, so
     // show the customer "typing…" (and mark their message read) while the
-    // retrieval + LLM round trips run. Meta clears the indicator after
-    // 25 s or when our reply lands, whichever is first, so there's
-    // nothing to undo on the handoff / no-text path. Strictly
-    // best-effort: a failed indicator must never cost us the reply.
+    // retrieval + LLM round trips run.
     if (inboundMessageId) {
       await showTypingIndicator(db, accountId, inboundMessageId)
     }
 
-    // Ground the reply in the account's knowledge base (best-effort).
+    // Ground the reply in the agent's scoped knowledge base.
     const knowledge = await retrieveKnowledge(
       db,
       accountId,
-      config,
+      effectiveConfig,
       latestUserMessage(messages),
+      5,
+      agentId,
     )
 
     const systemPrompt = buildSystemPrompt({
-      userPrompt: config.systemPrompt,
+      userPrompt: effectiveConfig.systemPrompt,
       mode: 'auto_reply',
       knowledge,
     })
 
     const { text, handoff, usage } = await generateReply({
-      config,
+      config: effectiveConfig,
       systemPrompt,
       messages,
     })
 
-    // Record token spend on the account's BYO key. Fire-and-forget so it
-    // never adds latency to the customer-facing send: `logAiUsage`
-    // swallows its own errors, so the floating promise can't reject.
-    // Logged regardless of handoff — the provider call happened either
-    // way.
+    // Record token spend on the account's BYO key.
     void logAiUsage(db, {
       accountId,
       conversationId,
       mode: 'auto_reply',
-      provider: config.provider,
-      model: config.model,
+      provider: effectiveConfig.provider,
+      model: effectiveConfig.model,
       usage,
+      agentId,
     })
 
     if (handoff || !text) {
       // The model can't (or shouldn't) answer — stop auto-replying on
-      // this thread and hand it to a human. We (a) pause the bot here
-      // (sticky until re-enabled), (b) route the conversation to the
-      // configured handoff agent — null leaves it in the shared queue —
-      // and (c) leave a short internal note so whoever picks it up has
-      // context. Assigning fires the `on_conversation_assigned` trigger,
-      // which notifies the agent.
+      // this thread and hand it to a human.
       const summary = buildHandoffSummary({
         messages,
         replyCount: conv.ai_reply_count ?? 0,
@@ -172,32 +203,23 @@ export async function dispatchInboundToAiReply(
         ai_autoreply_disabled: true,
         ai_handoff_summary: summary,
       }
-      // Only set the assignee when a target is configured AND the thread
-      // isn't already owned — never stomp an existing human assignment.
-      if (config.handoffAgentId && !conv.assigned_agent_id) {
-        update.assigned_agent_id = config.handoffAgentId
+      // Set the assignee to the agent's configured handoff person
+      if (effectiveConfig.handoffAgentId && !conv.assigned_agent_id) {
+        update.assigned_agent_id = effectiveConfig.handoffAgentId
       }
       await db.from('conversations').update(update).eq('id', conversationId)
       return
     }
 
-    // Atomically claim a reply slot: the cap check + increment happen in
-    // one UPDATE, so concurrent inbounds can never overshoot the cap. If
-    // another inbound just took the last slot, `claimed` is false and we
-    // skip the send. (We consume a slot slightly before the send lands —
-    // fail-safe: under-reply rather than over-reply.)
+    // Atomically claim a reply slot with the agent's configured max replies cap.
     const { data: claimed, error: claimErr } = await db.rpc(
       'claim_ai_reply_slot',
       {
         conversation_id: conversationId,
-        max_replies: config.autoReplyMaxPerConversation,
+        max_replies: effectiveConfig.autoReplyMaxPerConversation,
       },
     )
     if (claimErr) {
-      // A real error here (vs. losing the cap race) is almost always a
-      // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
-      // service role, or the migration not applied. Log it loudly: a
-      // silent return makes "auto-reply never fires" undiagnosable.
       console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
       return
     }
